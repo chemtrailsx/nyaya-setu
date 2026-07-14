@@ -21,6 +21,7 @@ import type {
   CaseEvent,
   CaseState,
   ImageInput,
+  LanguageCode,
   StreamEvent,
 } from "@/lib/types";
 
@@ -28,6 +29,9 @@ export type Emit = (e: StreamEvent) => void;
 
 export interface PipelineOptions {
   phone?: string;
+  /** Force output in this language regardless of the document's language.
+   *  When omitted, output follows the detected document language. */
+  outputLanguage?: LanguageCode;
 }
 
 export async function runPipeline(
@@ -68,9 +72,12 @@ export async function runPipeline(
 
     // ── 01 Document ────────────────────────────────────────────────────────
     log("document", "running", "OCR, language detection and legal classification…");
-    const document = await runDocumentAgent(image);
+    const document = await runDocumentAgent(image, opts.outputLanguage);
     state.document = document;
-    state.language = document.language;
+    // Output language: the user's explicit choice wins over the detected one,
+    // so a non-reader gets everything in their own tongue.
+    const outputLang: LanguageCode = opts.outputLanguage ?? document.language;
+    state.language = outputLang;
     state.category = document.category;
     state.confidence.ocr = document.ocrConfidence;
     state.confidence.classification = document.classificationConfidence;
@@ -83,7 +90,7 @@ export async function runPipeline(
 
     // ── 02 Strategy (grounded RAG) ─────────────────────────────────────────
     log("strategy", "running", "Retrieving statute and generating a grounded action plan…");
-    const strategy = await runStrategyAgent(document);
+    const strategy = await runStrategyAgent(document, outputLang);
     state.strategy = strategy;
     state.confidence.retrieval = strategy.retrievalScore;
     log(
@@ -97,7 +104,7 @@ export async function runPipeline(
     let draftConfidence: number | undefined;
     if (strategy.steps.length > 0) {
       log("drafting", "running", "Drafting the filing in the user's language…");
-      const draft = await runDraftingAgent(document, strategy);
+      const draft = await runDraftingAgent(document, strategy, outputLang);
       state.draft = draft;
       draftConfidence = draft.draftConfidence;
       log("drafting", "done", `Draft "${draft.kind}" prepared (confidence ${draft.draftConfidence}).`);

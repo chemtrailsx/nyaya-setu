@@ -8,7 +8,14 @@
 import { llm } from "@/lib/llm";
 import { retrieve } from "@/lib/rag/retrieve";
 import { loadCorpus } from "@/lib/rag/corpus";
-import type { CaseCategory, DocumentAgentResult, LegalCode, StrategyAgentResult } from "@/lib/types";
+import { SUPPORTED_LANGUAGES } from "@/lib/types";
+import type {
+  CaseCategory,
+  DocumentAgentResult,
+  LanguageCode,
+  LegalCode,
+  StrategyAgentResult,
+} from "@/lib/types";
 
 /** Human-readable names so the model cites confidently (and knows the code). */
 const CODE_NAME: Record<LegalCode, string> = {
@@ -59,7 +66,11 @@ function buildQuery(doc: DocumentAgentResult): string {
   return `${terms} ${doc.summary} ${doc.extractedText}`.slice(0, 1400);
 }
 
-export async function runStrategyAgent(doc: DocumentAgentResult): Promise<StrategyAgentResult> {
+export async function runStrategyAgent(
+  doc: DocumentAgentResult,
+  outputLang: LanguageCode,
+): Promise<StrategyAgentResult> {
+  const langName = SUPPORTED_LANGUAGES[outputLang].name;
   const chunks = await retrieve(buildQuery(doc), {
     topK: 6,
     preferCodes: CATEGORY_CODES[doc.category] ?? CATEGORY_CODES.other,
@@ -100,14 +111,14 @@ DOCUMENT ANALYSIS:
 - Category: ${doc.category}
 - Summary: ${doc.summary}
 - Extracted text (excerpt): ${doc.extractedText.slice(0, 800)}
-- User's language: ${doc.language}
+- WRITE ALL user-facing text (action, rationale) in: ${langName}
 
 Produce a grounded action plan as this exact JSON:
 {
   "steps": [
     {
       "order": <1-based>,
-      "action": "<what to do, in the user's language ${doc.language}>",
+      "action": "<what to do, written in ${langName}, in simple words a non-lawyer understands>",
       "office": "<the specific office/authority>",
       "officer": "<officer title, e.g. Station House Officer, Tehsildar>",
       "forms": ["<form name/number>"],
@@ -118,7 +129,7 @@ Produce a grounded action plan as this exact JSON:
     }
   ],
   "nalsaEligible": <true if the user (e.g. woman, SC/ST, low income) likely qualifies for free NALSA aid>,
-  "rationale": "<2-3 sentences, in the user's language, on why this is the right path>"
+  "rationale": "<2-3 sentences in ${langName}, plain words, on why this is the right path>"
 }
 Rules:
 - Every citation MUST use the exact {"code","section"} shown for a passage above; never cite anything not retrieved.

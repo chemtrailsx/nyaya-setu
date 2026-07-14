@@ -6,7 +6,8 @@
  * against retrieved statute, so a wrong guess here cannot become filed law.
  */
 import { getVisionLLM } from "@/lib/llm";
-import type { DocumentAgentResult, ImageInput } from "@/lib/types";
+import { SUPPORTED_LANGUAGES } from "@/lib/types";
+import type { DocumentAgentResult, ImageInput, LanguageCode } from "@/lib/types";
 
 const SYSTEM = `You are the Document Agent of NyayaSetu, a legal-aid engine for rural India.
 You read a photographed legal document (FIR, land deed, court notice, summons,
@@ -30,11 +31,19 @@ Rules:
 - If the image is unreadable, set ocrConfidence low and extractedText to what little you see.
 - summary MUST be in the document's own language so the user understands it.`;
 
-export async function runDocumentAgent(image: ImageInput): Promise<DocumentAgentResult> {
+export async function runDocumentAgent(
+  image: ImageInput,
+  preferredLang?: LanguageCode,
+): Promise<DocumentAgentResult> {
+  // If the user chose an output language, write the summary in it (so a
+  // non-reader hears the document explained in their own tongue).
+  const prompt = preferredLang
+    ? `${PROMPT}\n\nIMPORTANT: write the "summary" field in ${SUPPORTED_LANGUAGES[preferredLang].name}, in simple words.`
+    : PROMPT;
   const result = await getVisionLLM().completeVision<DocumentAgentResult>(
     image.base64,
     image.mediaType,
-    PROMPT,
+    prompt,
     { system: SYSTEM, maxTokens: 4096, temperature: 0 },
   );
 

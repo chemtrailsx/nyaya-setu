@@ -36,18 +36,19 @@ export function useCaseStream() {
   const [state, setState] = useState<CaseStreamState>(INITIAL);
   const abort = useRef<AbortController | null>(null);
 
-  const run = useCallback(async (imageBase64: string, mediaType: string, phone?: string) => {
-    abort.current?.abort();
-    abort.current = new AbortController();
-    setState({ ...INITIAL, running: true });
+  const run = useCallback(
+    async (imageBase64: string, mediaType: string, language?: string, phone?: string) => {
+      abort.current?.abort();
+      abort.current = new AbortController();
+      setState({ ...INITIAL, running: true });
 
-    try {
-      const res = await fetch("/api/case", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64, mediaType, phone }),
-        signal: abort.current.signal,
-      });
+      try {
+        const res = await fetch("/api/case", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64, mediaType, language, phone }),
+          signal: abort.current.signal,
+        });
 
       if (!res.ok || !res.body) {
         const msg = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));

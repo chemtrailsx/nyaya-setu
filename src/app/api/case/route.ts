@@ -7,7 +7,7 @@
  */
 import { runPipeline } from "@/lib/agents/orchestrator";
 import { hasLLM } from "@/lib/config";
-import type { ImageInput, StreamEvent } from "@/lib/types";
+import { SUPPORTED_LANGUAGES, type ImageInput, type LanguageCode, type StreamEvent } from "@/lib/types";
 
 export const runtime = "nodejs";
 // Vercel Hobby (free) caps serverless functions at 60s. A normal run is
@@ -22,17 +22,22 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { imageBase64?: string; mediaType?: string; phone?: string };
+  let body: { imageBase64?: string; mediaType?: string; phone?: string; language?: string };
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { imageBase64, mediaType, phone } = body;
+  const { imageBase64, mediaType, phone, language } = body;
   if (!imageBase64 || !mediaType) {
     return Response.json({ error: "imageBase64 and mediaType are required." }, { status: 400 });
   }
+  // "auto" (or unset) → follow the detected document language.
+  const outputLanguage =
+    language && language !== "auto" && language in SUPPORTED_LANGUAGES
+      ? (language as LanguageCode)
+      : undefined;
 
   const image: ImageInput = {
     base64: imageBase64.replace(/^data:[^,]+,/, ""), // tolerate data: URLs
@@ -46,7 +51,7 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
       };
       try {
-        await runPipeline(image, { phone }, emit);
+        await runPipeline(image, { phone, outputLanguage }, emit);
       } catch (err) {
         emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
       } finally {

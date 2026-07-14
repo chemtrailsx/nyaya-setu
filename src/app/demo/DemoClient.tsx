@@ -1,10 +1,33 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Upload, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download } from "lucide-react";
+import { useRef, useState } from "react";
+import { Upload, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
-import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent } from "@/lib/types";
+import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type LanguageCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+// Output-language options (the user picks per run; "auto" follows the document).
+const LANG_OPTIONS: { code: string; label: string }[] = [
+  { code: "auto", label: "Auto-detect" },
+  ...Object.entries(SUPPORTED_LANGUAGES).map(([code, l]) => ({ code, label: `${l.native} (${l.name})` })),
+];
+
+const BCP47: Record<string, string> = {
+  hi: "hi-IN", en: "en-IN", bn: "bn-IN", ta: "ta-IN", te: "te-IN", mr: "mr-IN", auto: "en-IN",
+};
+
+/** Read text aloud in the user's language — the core non-reader affordance. */
+function speak(text: string, langCode: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = BCP47[langCode] ?? "en-IN";
+  u.rate = 0.95;
+  window.speechSynthesis.speak(u);
+}
+function stopSpeaking() {
+  if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
+}
 
 const AGENT_META: Record<AgentName, { label: string; icon: typeof FileText }> = {
   document: { label: "Document Agent", icon: FileText },
@@ -17,6 +40,7 @@ const AGENT_META: Record<AgentName, { label: string; icon: typeof FileText }> = 
 export function DemoClient() {
   const { state, run, reset } = useCaseStream();
   const [image, setImage] = useState<{ dataUrl: string; mediaType: string; name: string } | null>(null);
+  const [lang, setLang] = useState("auto");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const onFile = (file: File) => {
@@ -28,8 +52,12 @@ export function DemoClient() {
 
   const start = () => {
     if (!image) return;
-    run(image.dataUrl, image.mediaType);
+    stopSpeaking();
+    run(image.dataUrl, image.mediaType, lang);
   };
+  // The BCP-47 tag to read results aloud with: the chosen language, or the
+  // document's detected language when on auto.
+  const speakLang = lang !== "auto" ? lang : state.results.document?.language ?? "en";
 
   const startOver = () => {
     reset();
@@ -69,7 +97,20 @@ export function DemoClient() {
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
           />
 
-          <div className="mt-4 flex gap-2">
+          <label className="mt-4 block">
+            <span className="text-xs font-semibold text-ink-3">Answer me in</span>
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm font-semibold text-ink"
+            >
+              {LANG_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="mt-3 flex gap-2">
             <button
               onClick={start}
               disabled={!image || state.running}
@@ -98,10 +139,10 @@ export function DemoClient() {
           <div className="rounded-card border border-red/30 bg-red-50 p-4 text-sm text-red">{state.error}</div>
         )}
         {!hasRun && <EmptyState />}
-        {state.results.document && <DocumentPanel results={state.results} />}
+        {state.results.document && <DocumentPanel results={state.results} speakLang={speakLang} />}
         {state.results.signals && <ConfidencePanel results={state.results} />}
-        {state.results.strategy && <PlanPanel results={state.results} />}
-        {state.results.draft && <DraftPanel results={state.results} />}
+        {state.results.strategy && <PlanPanel results={state.results} speakLang={speakLang} />}
+        {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
       </div>
@@ -160,12 +201,19 @@ function Card({ title, badge, children }: { title: string; badge?: React.ReactNo
   );
 }
 
-function DocumentPanel({ results }: { results: CaseResults }) {
+function DocumentPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const d = results.document!;
-  const lang = SUPPORTED_LANGUAGES[d.language];
   return (
-    <Card title="What the document says" badge={<Chip>{lang?.native ?? d.language} · {d.category.replace("_", " ")}</Chip>}>
-      <p className="deva text-ink" lang={d.language}>{d.summary}</p>
+    <Card
+      title="What the document says"
+      badge={
+        <div className="flex items-center gap-2">
+          <ListenButton text={d.summary} lang={speakLang} />
+          <Chip>{d.category.replace("_", " ")}</Chip>
+        </div>
+      }
+    >
+      <p className="deva text-ink" lang={speakLang}>{d.summary}</p>
       {d.extractedText && (
         <details className="mt-3">
           <summary className="cursor-pointer text-xs font-semibold text-ink-3">Show extracted text (OCR)</summary>
@@ -210,10 +258,19 @@ function Meter({ label, value, big, tone = "indigo" }: { label: string; value: n
   );
 }
 
-function PlanPanel({ results }: { results: CaseResults }) {
+function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const st = results.strategy!;
+  const spoken = [st.rationale, ...st.steps.map((s) => `${s.order}. ${s.action}`)].filter(Boolean).join(". ");
   return (
-    <Card title="Action plan" badge={st.nalsaEligible ? <Chip tone="green">NALSA free aid</Chip> : undefined}>
+    <Card
+      title="Action plan"
+      badge={
+        <div className="flex items-center gap-2">
+          <ListenButton text={spoken} lang={speakLang} />
+          {st.nalsaEligible ? <Chip tone="green">NALSA free aid</Chip> : null}
+        </div>
+      }
+    >
       {st.rationale && <p className="deva mb-3 text-sm text-ink-2">{st.rationale}</p>}
       <ol className="space-y-3">
         {st.steps.map((s) => (
@@ -255,7 +312,7 @@ function PlanPanel({ results }: { results: CaseResults }) {
   );
 }
 
-function DraftPanel({ results }: { results: CaseResults }) {
+function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const d = results.draft!;
   const download = () => {
     const blob = new Blob([d.body], { type: "text/plain;charset=utf-8" });
@@ -267,9 +324,17 @@ function DraftPanel({ results }: { results: CaseResults }) {
     URL.revokeObjectURL(url);
   };
   return (
-    <Card title="Drafted filing" badge={<button onClick={download} className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600"><Download className="h-3 w-3" />Download</button>}>
-      <p className="mb-2 deva font-bold text-ink" lang={d.language}>{d.title}</p>
-      <pre className="deva max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-surface-2 p-4 text-sm leading-relaxed text-ink" lang={d.language}>{d.body}</pre>
+    <Card
+      title="Drafted filing"
+      badge={
+        <div className="flex items-center gap-2">
+          <ListenButton text={`${d.title}. ${d.body}`} lang={speakLang} />
+          <button onClick={download} className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600"><Download className="h-3 w-3" />Download</button>
+        </div>
+      }
+    >
+      <p className="mb-2 deva font-bold text-ink" lang={speakLang}>{d.title}</p>
+      <pre className="deva max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-surface-2 p-4 text-sm leading-relaxed text-ink" lang={speakLang}>{d.body}</pre>
       <p className="mt-2 text-xs text-ink-3">⚠ A Bar Council-verified advocate reviews any filing before it goes to court. Verify with the named office before acting.</p>
     </Card>
   );
@@ -326,6 +391,38 @@ function Info({ k, v }: { k: string; v: string }) {
 function Chip({ children, tone = "indigo" }: { children: React.ReactNode; tone?: "indigo" | "green" | "amber" }) {
   const map = { indigo: "bg-indigo-50 text-indigo", green: "bg-green-50 text-green", amber: "bg-amber-50 text-amber" };
   return <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", map[tone])}>{children}</span>;
+}
+
+/** Reads text aloud in the user's language — the core non-reader affordance. */
+function ListenButton({ text, lang }: { text: string; lang: string }) {
+  const [on, setOn] = useState(false);
+  const supported = typeof window !== "undefined" && "speechSynthesis" in window;
+  if (!supported || !text) return null;
+  const toggle = () => {
+    if (on) {
+      window.speechSynthesis.cancel();
+      setOn(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = BCP47[lang] ?? "en-IN";
+    u.rate = 0.95;
+    u.onend = () => setOn(false);
+    u.onerror = () => setOn(false);
+    window.speechSynthesis.speak(u);
+    setOn(true);
+  };
+  return (
+    <button
+      onClick={toggle}
+      className="flex items-center gap-1 rounded-lg border border-indigo-400/30 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo transition hover:bg-indigo-100"
+      aria-label={on ? "Stop reading aloud" : "Read aloud"}
+    >
+      {on ? <Square className="h-3 w-3" /> : <Volume2 className="h-3.5 w-3.5" />}
+      {on ? "Stop" : "Listen"}
+    </button>
+  );
 }
 function EmptyState() {
   return (

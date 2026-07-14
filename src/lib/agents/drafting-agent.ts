@@ -6,10 +6,12 @@
  * for anything personal it doesn't know — never free-floating invented facts.
  */
 import { llm } from "@/lib/llm";
+import { SUPPORTED_LANGUAGES } from "@/lib/types";
 import type {
   DocumentAgentResult,
   DraftAgentResult,
   DraftKind,
+  LanguageCode,
   StrategyAgentResult,
 } from "@/lib/types";
 
@@ -31,27 +33,29 @@ numbers, or facts. Cite the correct statutory provisions the plan relies on.`;
 export async function runDraftingAgent(
   doc: DocumentAgentResult,
   strategy: StrategyAgentResult,
+  outputLang: LanguageCode,
 ): Promise<DraftAgentResult> {
   const kind = KIND_BY_CATEGORY[doc.category] ?? "rti_application";
+  const langName = SUPPORTED_LANGUAGES[outputLang].name;
   const citations = Array.from(
     new Set(strategy.steps.flatMap((s) => s.citations.map((c) => `${c.code} ${c.section}`))),
   ).join(", ");
 
   const prompt = `Draft a "${kind}" document for this case.
 
-CASE SUMMARY (${doc.language}): ${doc.summary}
+CASE SUMMARY: ${doc.summary}
 ACTION PLAN: ${strategy.steps.map((s) => `${s.order}. ${s.action} (${s.office})`).join("; ")}
 RELEVANT PROVISIONS TO CITE: ${citations || "as per the retrieved statute"}
 
 Return this exact JSON:
 {
   "kind": "${kind}",
-  "title": "<document title in ${doc.language}>",
-  "body": "<the full formal document text in ${doc.language}, with [PLACEHOLDER] fields, addressed to the correct authority, citing the provisions, ready to print and sign>",
+  "title": "<document title in ${langName}>",
+  "body": "<the full formal document text in ${langName}, with [PLACEHOLDER] fields, addressed to the correct authority, citing the provisions, ready to print and sign>",
   "fieldsFilled": { "<field>": "<value you were able to infer, else omit>" },
   "draftConfidence": <0..1 how confident you are this draft is procedurally correct and complete>
 }
-The body must be a complete document (salutation, subject, body, prayer/request, signature block), not a description of one.`;
+Write the whole document in ${langName}. The body must be a complete document (salutation, subject, body, prayer/request, signature block), not a description of one.`;
 
   const out = await llm.completeJSON<DraftAgentResult>(prompt, {
     system: SYSTEM,
@@ -64,7 +68,7 @@ The body must be a complete document (salutation, subject, body, prayer/request,
     kind: (out.kind as DraftKind) ?? kind,
     title: out.title ?? "",
     body: out.body ?? "",
-    language: doc.language,
+    language: outputLang,
     fieldsFilled: out.fieldsFilled ?? {},
     draftConfidence: clamp(out.draftConfidence),
   };
