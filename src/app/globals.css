@@ -1,26 +1,106 @@
 @import "tailwindcss";
 
+/* ─── NyayaSetu design tokens ──────────────────────────────────────────
+   Trust (deep indigo) + Hope (warm saffron) + high-contrast neutrals.
+   Light-first: the product is used by rural users on low-end phones,
+   where legibility and contrast beat aesthetics. */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* surfaces */
+  --bg: #fbf9f4;          /* warm paper */
+  --surface: #ffffff;
+  --surface-2: #f4f1ea;
+  --border: #e6e0d4;
+
+  /* text */
+  --ink: #1a1c2e;         /* near-black indigo */
+  --ink-2: #4a4d63;
+  --ink-3: #797d92;
+
+  /* brand — justice indigo */
+  --indigo: #26305f;
+  --indigo-600: #313c76;
+  --indigo-400: #5a66a8;
+  --indigo-50: #eef0f8;
+
+  /* accent — hope saffron */
+  --saffron: #e07b28;
+  --saffron-600: #c9691c;
+  --saffron-50: #fdf1e6;
+
+  /* semantic */
+  --green: #1f7a54;       /* verified / success */
+  --green-50: #e8f4ee;
+  --amber: #b8860b;       /* caution / simulated */
+  --amber-50: #fbf3df;
+  --red: #b4322a;         /* danger / escalation */
+  --red-50: #fbeae8;
+
+  --radius: 0.85rem;
+  --shadow-sm: 0 1px 2px rgba(26, 28, 46, 0.06), 0 1px 3px rgba(26, 28, 46, 0.04);
+  --shadow-md: 0 4px 12px rgba(26, 28, 46, 0.08), 0 2px 4px rgba(26, 28, 46, 0.04);
+  --shadow-lg: 0 12px 32px rgba(26, 28, 46, 0.12);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-indigo: var(--indigo);
+  --color-indigo-600: var(--indigo-600);
+  --color-indigo-400: var(--indigo-400);
+  --color-indigo-50: var(--indigo-50);
+  --color-saffron: var(--saffron);
+  --color-saffron-600: var(--saffron-600);
+  --color-saffron-50: var(--saffron-50);
+  --color-green: var(--green);
+  --color-green-50: var(--green-50);
+  --color-amber: var(--amber);
+  --color-amber-50: var(--amber-50);
+  --color-red: var(--red);
+  --color-red-50: var(--red-50);
+  --radius-card: var(--radius);
+  --font-sans: var(--font-noto-sans);
+  --font-deva: var(--font-noto-deva);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-noto-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Devanagari / Indic text renders with the script-aware font stack */
+.deva,
+[lang="hi"],
+[lang="mr"],
+[lang="ne"] {
+  font-family: var(--font-noto-deva), var(--font-noto-sans), sans-serif;
+}
+
+/* Accessibility: large, unambiguous focus ring for keyboard + low-vision */
+:focus-visible {
+  outline: 3px solid var(--saffron);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.animate-pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
 }
