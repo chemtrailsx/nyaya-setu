@@ -1,74 +1,60 @@
 /**
- * Hybrid retrieval over the legal corpus: dense (Voyage vectors) fused with
- * keyword scoring. This grounds every legal claim in a real retrieved
- * passage — the first line of "defence in depth" against hallucinated law.
+ * Hybrid retrieval over the legal corpus: BM25 lexical ranking fused with an
+ * optional dense (embedding) bonus. This grounds every legal claim in a real
+ * retrieved passage — the first line of "defence in depth" against
+ * hallucinated law.
  *
- * Graceful degradation:
- *   - Voyage key present + embedded corpus → hybrid dense + keyword
- *   - otherwise                            → keyword-only (still grounded)
+ * BM25 is the always-on base (free, no quota, serverless-friendly). When
+ * embeddings exist for a chunk, a semantic bonus refines the ranking.
  */
 import { hasEmbeddings } from "@/lib/config";
 import { embed, cosine } from "@/lib/rag/embed";
-import { loadCorpus, type EmbeddedChunk } from "@/lib/rag/corpus";
+import { loadCorpus } from "@/lib/rag/corpus";
+import { bm25Search } from "@/lib/rag/bm25";
 import type { LegalCode, RetrievedChunk } from "@/lib/types";
-
-const STOP = new Set([
-  "the", "a", "an", "of", "to", "in", "for", "and", "or", "is", "on", "my",
-  "i", "he", "she", "her", "his", "was", "has", "have", "with", "by", "at",
-]);
-
-function tokenize(s: string): string[] {
-  return s.toLowerCase().replace(/[^a-z0-9\s()]/g, " ").split(/\s+/).filter((t) => t && !STOP.has(t));
-}
-
-/** Keyword relevance in [0,1]: token overlap, with exact section-number boost. */
-function keywordScore(query: string, chunk: EmbeddedChunk): number {
-  const q = tokenize(query);
-  if (q.length === 0) return 0;
-  const hay = tokenize(`${chunk.code} ${chunk.section} ${chunk.title} ${chunk.text}`);
-  const haySet = new Set(hay);
-  let hits = 0;
-  for (const t of q) if (haySet.has(t)) hits++;
-  let score = hits / q.length;
-  // Exact section reference in the query (e.g. "199", "173(4)") is a strong signal.
-  if (query.includes(chunk.section)) score = Math.min(1, score + 0.4);
-  return score;
-}
 
 export interface RetrieveOpts {
   topK?: number;
   codes?: LegalCode[]; // optionally restrict to certain statute books
+  preferCodes?: LegalCode[]; // boost (don't filter) these books — category-aware
 }
+
+/** Squash a raw score into a meaningful 0..1 relevance (top isn't forced to 1). */
+const saturate = (x: number) => x / (x + 12);
 
 export async function retrieve(query: string, opts: RetrieveOpts = {}): Promise<RetrievedChunk[]> {
   const topK = opts.topK ?? 6;
-  let chunks = loadCorpus();
-  if (opts.codes?.length) chunks = chunks.filter((c) => opts.codes!.includes(c.code));
+  const chunks = loadCorpus();
   if (chunks.length === 0) return [];
 
-  const keyword = chunks.map((c) => keywordScore(query, c));
+  const lexical = bm25Search(query);
+  if (lexical.length === 0) return [];
 
-  let dense: number[] | null = null;
-  const haveVectors = chunks.some((c) => c.embedding?.length);
-  if (hasEmbeddings() && haveVectors) {
+  // Dense bonus over the top lexical candidates that have embeddings.
+  const denseBonus = new Map<number, number>();
+  const candidates = lexical.slice(0, 40);
+  if (hasEmbeddings() && candidates.some((h) => chunks[h.idx].embedding?.length)) {
     try {
       const [qv] = await embed([query], "query");
-      dense = chunks.map((c) => (c.embedding?.length ? (cosine(qv, c.embedding) + 1) / 2 : 0));
+      for (const h of candidates) {
+        const emb = chunks[h.idx].embedding;
+        if (emb?.length) denseBonus.set(h.idx, ((cosine(qv, emb) + 1) / 2) * 8); // 0..8 bonus
+      }
     } catch {
-      dense = null; // fall back to keyword-only on any embedding failure
+      /* keep BM25-only on any embedding failure */
     }
   }
 
-  const scored = chunks.map((c, i) => {
-    const kw = keyword[i];
-    const dn = dense ? dense[i] : 0;
-    // Weight dense higher when available; keyword keeps exact citations sharp.
-    const score = dense ? 0.65 * dn + 0.35 * kw : kw;
-    return { ...c, score: Number(score.toFixed(4)) } as RetrievedChunk;
+  const prefer = new Set(opts.preferCodes ?? []);
+  let scored: RetrievedChunk[] = candidates.map((h) => {
+    const raw = h.score + (denseBonus.get(h.idx) ?? 0);
+    // Category-aware boost: we know the case type, so up-weight the statute
+    // books that actually govern it (e.g. succession law for an inheritance case).
+    const boosted = prefer.has(chunks[h.idx].code) ? raw * 1.7 : raw;
+    return { ...chunks[h.idx], score: Number(saturate(boosted).toFixed(4)) };
   });
 
-  return scored
-    .filter((c) => c.score > 0.05)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
+  if (opts.codes?.length) scored = scored.filter((c) => opts.codes!.includes(c.code));
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, topK);
 }

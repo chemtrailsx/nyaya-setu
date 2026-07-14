@@ -1,6 +1,8 @@
 /**
- * Loads the legal corpus from disk and caches it in memory. Prefers the
- * embedded build (with Voyage vectors) and falls back to the plain corpus.
+ * Loads the legal corpus. `legal-corpus.json` is the source of truth for which
+ * sections exist (BNS/BNSS/HSA/NALSA). If `legal-corpus.embedded.json` exists,
+ * its vectors are overlaid onto matching sections by id — so embeddings are an
+ * optional enhancement, never a gate on which law is available.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,16 +17,29 @@ let cache: EmbeddedChunk[] | null = null;
 export function loadCorpus(): EmbeddedChunk[] {
   if (cache) return cache;
   const dir = join(process.cwd(), "data", "corpus");
-  for (const file of ["legal-corpus.embedded.json", "legal-corpus.json"]) {
-    try {
-      const raw = readFileSync(join(dir, file), "utf-8");
-      cache = JSON.parse(raw) as EmbeddedChunk[];
-      return cache;
-    } catch {
-      // try next file
-    }
+
+  let base: EmbeddedChunk[] = [];
+  try {
+    base = JSON.parse(readFileSync(join(dir, "legal-corpus.json"), "utf-8"));
+  } catch {
+    cache = [];
+    return cache;
   }
-  cache = [];
+
+  // Overlay any available embeddings by id.
+  try {
+    const embedded: EmbeddedChunk[] = JSON.parse(
+      readFileSync(join(dir, "legal-corpus.embedded.json"), "utf-8"),
+    );
+    const vecById = new Map(embedded.filter((c) => c.embedding?.length).map((c) => [c.id, c.embedding]));
+    if (vecById.size) {
+      base = base.map((c) => (vecById.has(c.id) ? { ...c, embedding: vecById.get(c.id) } : c));
+    }
+  } catch {
+    /* no embeddings yet — lexical retrieval still works */
+  }
+
+  cache = base;
   return cache;
 }
 
