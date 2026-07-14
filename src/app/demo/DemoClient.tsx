@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square } from "lucide-react";
+import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
 import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type LanguageCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -22,16 +22,13 @@ const EXAMPLES = [
   { url: "/examples/fir-denial-notice.png", name: "fir-denial-notice.png", label: "FIR denial (women-first)", hint: "Dense advocate's legal notice" },
 ];
 
-/** Read text aloud in the user's language — the core non-reader affordance. */
-function speak(text: string, langCode: string) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = BCP47[langCode] ?? "en-IN";
-  u.rate = 0.95;
-  window.speechSynthesis.speak(u);
-}
+// A single shared audio channel so starting one read-aloud stops any other.
+let currentAudio: HTMLAudioElement | null = null;
 function stopSpeaking() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
   if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
 }
 
@@ -48,6 +45,7 @@ export function DemoClient() {
   const [image, setImage] = useState<{ dataUrl: string; mediaType: string; name: string } | null>(null);
   const [lang, setLang] = useState("auto");
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const onFile = (file: File) => {
     const reader = new FileReader();
@@ -92,30 +90,41 @@ export function DemoClient() {
       {/* Left: input + agent trace */}
       <div className="space-y-6">
         <div className="rounded-card border border-border bg-surface p-5 shadow-sm">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Upload a document</h2>
+          <h2 className="text-base font-extrabold text-ink">Take a photo of your document</h2>
+          <p className="mt-0.5 text-xs text-ink-3">FIR, land paper, court notice, legal letter — any language.</p>
           {!image ? (
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="mt-3 flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-surface-2 px-4 py-8 text-center transition hover:border-saffron"
-            >
-              <Upload className="h-6 w-6 text-ink-3" />
-              <span className="text-sm font-semibold text-ink-2">Choose a photo</span>
-              <span className="text-xs text-ink-3">FIR, land deed, notice, summons — JPG/PNG</span>
-            </button>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => cameraRef.current?.click()}
+                className="flex flex-col items-center gap-2 rounded-xl bg-saffron px-4 py-6 text-white shadow-sm transition hover:bg-saffron-600"
+              >
+                <Camera className="h-8 w-8" />
+                <span className="text-sm font-bold">Take a photo</span>
+              </button>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex flex-col items-center gap-2 rounded-xl border-2 border-border bg-surface-2 px-4 py-6 text-ink-2 transition hover:border-saffron"
+              >
+                <Images className="h-8 w-8 text-ink-3" />
+                <span className="text-sm font-bold">From gallery</span>
+              </button>
+            </div>
           ) : (
             <div className="mt-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={image.dataUrl} alt={image.name} className="max-h-56 w-full rounded-lg border border-border object-contain bg-surface-2" />
-              <p className="mt-2 truncate text-xs text-ink-3">{image.name}</p>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="mt-2 text-xs font-semibold text-indigo hover:underline"
+              >
+                Choose a different document
+              </button>
             </div>
           )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
-          />
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+            onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
 
           <div className="mt-4">
             <span className="text-xs font-semibold text-ink-3">Or try an example</span>
@@ -430,34 +439,64 @@ function Chip({ children, tone = "indigo" }: { children: React.ReactNode; tone?:
   return <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", map[tone])}>{children}</span>;
 }
 
-/** Reads text aloud in the user's language — the core non-reader affordance. */
+/** Reads text aloud in the user's language — the core non-reader affordance.
+ *  Uses the /api/tts proxy (reliable multilingual audio on any device) and
+ *  falls back to the browser's own speech engine if that ever fails. */
 function ListenButton({ text, lang }: { text: string; lang: string }) {
-  const [on, setOn] = useState(false);
-  const supported = typeof window !== "undefined" && "speechSynthesis" in window;
-  if (!supported || !text) return null;
-  const toggle = () => {
-    if (on) {
-      window.speechSynthesis.cancel();
-      setOn(false);
+  const [status, setStatus] = useState<"idle" | "loading" | "playing">("idle");
+  if (!text) return null;
+
+  const speakViaBrowser = () => {
+    if (typeof window === "undefined" || !window.speechSynthesis) {
+      setStatus("idle");
       return;
     }
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(text.slice(0, 900));
     u.lang = BCP47[lang] ?? "en-IN";
     u.rate = 0.95;
-    u.onend = () => setOn(false);
-    u.onerror = () => setOn(false);
+    u.onend = () => setStatus("idle");
+    u.onerror = () => setStatus("idle");
     window.speechSynthesis.speak(u);
-    setOn(true);
+    setStatus("playing");
   };
+
+  const toggle = async () => {
+    if (status !== "idle") {
+      stopSpeaking();
+      setStatus("idle");
+      return;
+    }
+    setStatus("loading");
+    try {
+      const res = await fetch(`/api/tts?lang=${encodeURIComponent(lang)}&text=${encodeURIComponent(text.slice(0, 900))}`);
+      if (!res.ok) throw new Error("tts");
+      const url = URL.createObjectURL(await res.blob());
+      stopSpeaking();
+      const audio = new Audio(url);
+      currentAudio = audio;
+      audio.onended = () => setStatus("idle");
+      audio.onerror = () => speakViaBrowser();
+      await audio.play();
+      setStatus("playing");
+    } catch {
+      speakViaBrowser();
+    }
+  };
+
   return (
     <button
       onClick={toggle}
-      className="flex items-center gap-1 rounded-lg border border-indigo-400/30 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo transition hover:bg-indigo-100"
-      aria-label={on ? "Stop reading aloud" : "Read aloud"}
+      className="flex items-center gap-1 rounded-lg border border-indigo-400/30 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo transition hover:bg-indigo-100 disabled:opacity-60"
+      aria-label={status === "playing" ? "Stop reading aloud" : "Read aloud"}
     >
-      {on ? <Square className="h-3 w-3" /> : <Volume2 className="h-3.5 w-3.5" />}
-      {on ? "Stop" : "Listen"}
+      {status === "loading" ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : status === "playing" ? (
+        <Square className="h-3 w-3" />
+      ) : (
+        <Volume2 className="h-3.5 w-3.5" />
+      )}
+      {status === "playing" ? "Stop" : status === "loading" ? "…" : "Listen"}
     </button>
   );
 }
