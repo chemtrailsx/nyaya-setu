@@ -35,7 +35,7 @@ MIN_SIZE = 10  # body is 11pt; footnotes/superscripts are <=9pt
 # An OPERATIVE section heading is a number + title + em-dash + body. The
 # arrangement-of-sections INDEX lists titles with NO em-dash, so requiring the
 # dash cleanly skips the index (which otherwise hijacks the monotonic run).
-SECTION_RE = re.compile(r"(?:^|\n)(\d{1,3}[A-Z]?)\.\s+([^―—]{3,150}?)\s*[―—]\s*")
+SECTION_RE = re.compile(r"(?:^|\n)\[?(\d{1,3}[A-Z]?)\.\s*([^―—]{3,150}?)\s*[―—]\s*")
 
 
 def clean(t: str) -> str:
@@ -43,6 +43,7 @@ def clean(t: str) -> str:
     t = t.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
     t = re.sub(r"\d+\[", "[", t)         # drop footnote-ref numbers before "["
     t = re.sub(r"[\[\]]", "", t)          # drop amendment brackets
+    t = re.sub(r"(\([a-z0-9]{1,3}\))(?=[A-Za-z])", r"\1 ", t)  # "(1)Any" -> "(1) Any"
     t = re.sub(r"\s*\n\s*", " ", t)
     t = re.sub(r"([a-z])-\s+([a-z])", r"\1-\2", t)
     t = re.sub(r"[ \t]+", " ", t)

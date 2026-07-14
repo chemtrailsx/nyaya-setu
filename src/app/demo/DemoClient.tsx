@@ -16,6 +16,12 @@ const BCP47: Record<string, string> = {
   hi: "hi-IN", en: "en-IN", bn: "bn-IN", ta: "ta-IN", te: "te-IN", mr: "mr-IN", auto: "en-IN",
 };
 
+// One-click sample documents so judges can test instantly.
+const EXAMPLES = [
+  { url: "/examples/radha-land-notice.png", name: "radha-land-notice.png", label: "Land / inheritance dispute", hint: "Widow's mutation case" },
+  { url: "/examples/fir-denial-notice.png", name: "fir-denial-notice.png", label: "FIR denial (women-first)", hint: "Dense advocate's legal notice" },
+];
+
 /** Read text aloud in the user's language — the core non-reader affordance. */
 function speak(text: string, langCode: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -54,6 +60,20 @@ export function DemoClient() {
     if (!image) return;
     stopSpeaking();
     run(image.dataUrl, image.mediaType, lang);
+  };
+
+  // Load a bundled example image and run it in one click.
+  const loadExample = async (url: string, name: string) => {
+    stopSpeaking();
+    const blob = await (await fetch(url)).blob();
+    const dataUrl = await new Promise<string>((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.readAsDataURL(blob);
+    });
+    const img = { dataUrl, mediaType: blob.type || "image/png", name };
+    setImage(img);
+    run(img.dataUrl, img.mediaType, lang);
   };
   // The BCP-47 tag to read results aloud with: the chosen language, or the
   // document's detected language when on auto.
@@ -96,6 +116,23 @@ export function DemoClient() {
             className="hidden"
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
           />
+
+          <div className="mt-4">
+            <span className="text-xs font-semibold text-ink-3">Or try an example</span>
+            <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {EXAMPLES.map((ex) => (
+                <button
+                  key={ex.url}
+                  onClick={() => loadExample(ex.url, ex.name)}
+                  disabled={state.running}
+                  className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-left transition hover:border-saffron disabled:opacity-40"
+                >
+                  <span className="block text-sm font-bold text-ink">{ex.label}</span>
+                  <span className="block text-xs text-ink-3">{ex.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <label className="mt-4 block">
             <span className="text-xs font-semibold text-ink-3">Answer me in</span>
@@ -217,7 +254,7 @@ function DocumentPanel({ results, speakLang }: { results: CaseResults; speakLang
       {d.extractedText && (
         <details className="mt-3">
           <summary className="cursor-pointer text-xs font-semibold text-ink-3">Show extracted text (OCR)</summary>
-          <pre className="deva mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 text-xs text-ink-2" lang={d.language}>{d.extractedText}</pre>
+          <pre className="deva mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-2 p-3 text-xs text-ink-2" lang={d.language}>{d.extractedText}</pre>
         </details>
       )}
     </Card>
@@ -333,8 +370,8 @@ function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: s
         </div>
       }
     >
-      <p className="mb-2 deva font-bold text-ink" lang={speakLang}>{d.title}</p>
-      <pre className="deva max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-surface-2 p-4 text-sm leading-relaxed text-ink" lang={speakLang}>{d.body}</pre>
+      <p className="mb-2 deva font-bold text-ink break-words" lang={speakLang}>{d.title}</p>
+      <pre className="deva max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface-2 p-4 text-sm leading-relaxed text-ink" lang={speakLang}>{d.body}</pre>
       <p className="mt-2 text-xs text-ink-3">⚠ A Bar Council-verified advocate reviews any filing before it goes to court. Verify with the named office before acting.</p>
     </Card>
   );
