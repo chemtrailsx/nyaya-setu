@@ -14,7 +14,34 @@ import { config, hasGroq, hasGemini, hasAnthropic } from "@/lib/config";
 import { geminiProvider } from "./gemini";
 import { claudeProvider } from "./claude";
 import { groqProvider } from "./groq";
-import type { LLMProvider } from "./types";
+import type { CompletionOpts, ImageMediaType, LLMProvider } from "./types";
+
+/**
+ * Wrap several providers so a call tries each in order until one succeeds.
+ * If the primary is rate-limited (e.g. Groq's daily token cap), the call
+ * transparently falls back to the next provider — the pipeline never breaks
+ * on a single provider's quota.
+ */
+function withFallback(providers: LLMProvider[]): LLMProvider {
+  const run = async <T>(fn: (p: LLMProvider) => Promise<T>): Promise<T> => {
+    let lastErr: unknown;
+    for (const p of providers) {
+      try {
+        return await fn(p);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr;
+  };
+  return {
+    name: providers.map((p) => p.name).join(" → "),
+    complete: (prompt: string, opts?: CompletionOpts) => run((p) => p.complete(prompt, opts)),
+    completeJSON: <T>(prompt: string, opts?: CompletionOpts) => run((p) => p.completeJSON<T>(prompt, opts)),
+    completeVision: <T>(b: string, m: ImageMediaType, prompt: string, opts?: CompletionOpts) =>
+      run((p) => p.completeVision<T>(b, m, prompt, opts)),
+  };
+}
 
 /** The base provider chain (used when no role-specific preference applies). */
 export function getLLM(): LLMProvider {
@@ -24,12 +51,15 @@ export function getLLM(): LLMProvider {
   return claudeProvider;
 }
 
-/** Text agents: prefer Groq for speed + generous quota. */
+/** Text agents: Groq first (fast), then Gemini, then Claude — with fallback. */
 export function getTextLLM(): LLMProvider {
   if (config.provider === "claude") return claudeProvider;
-  if (hasGroq()) return groqProvider;
-  if (hasGemini()) return geminiProvider;
-  return claudeProvider;
+  const chain: LLMProvider[] = [];
+  if (hasGroq()) chain.push(groqProvider);
+  if (hasGemini()) chain.push(geminiProvider);
+  if (hasAnthropic()) chain.push(claudeProvider);
+  if (chain.length === 0) return claudeProvider;
+  return chain.length === 1 ? chain[0] : withFallback(chain);
 }
 
 /** Vision/OCR: prefer Gemini (best Indic OCR). */

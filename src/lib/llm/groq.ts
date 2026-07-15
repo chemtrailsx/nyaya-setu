@@ -49,8 +49,10 @@ async function chat(messages: Msg[], opts: CompletionOpts, attempt = 1): Promise
     throw networkErr;
   }
   if (!res.ok) {
-    if ((res.status === 429 || res.status >= 500) && attempt <= 5) {
-      await sleep(Math.min(20000, attempt * 3000));
+    // 5xx = transient (retry). 429 = rate/quota — throw immediately so the
+    // fallback provider (Gemini) takes over without a slow retry loop.
+    if (res.status >= 500 && attempt <= 4) {
+      await sleep(Math.min(15000, attempt * 3000));
       return chat(messages, opts, attempt + 1);
     }
     throw new Error(`Groq error ${res.status}: ${await res.text()}`);

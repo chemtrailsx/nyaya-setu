@@ -38,7 +38,7 @@ export const config = {
   },
   groq: {
     apiKey: groqKey,
-    model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+    model: process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct",
   },
   supabase: {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
