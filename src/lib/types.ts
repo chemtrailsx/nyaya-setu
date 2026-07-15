@@ -103,7 +103,9 @@ export interface ActionStep {
   order: number;
   action: string; // what to do
   office: string; // where — the specific office/authority
+  officeAddress: string; // how to find/reach that office (in plain terms)
   officer: string; // whom — officer title
+  contact: string; // who to contact / helpline number for this step
   forms: string[]; // form numbers/names required
   documents: string[]; // supporting documents to attach
   deadlineDays: number | null; // statutory window, if any

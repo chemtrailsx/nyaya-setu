@@ -11,6 +11,7 @@ export default function Home() {
         <Problem />
         <HowItWorks />
         <Pillars />
+        <Privacy />
         <Trust />
         <FinalCta />
       </main>
@@ -120,19 +121,19 @@ const AGENTS = [
     n: "01",
     name: "Document Agent",
     desc: "OCRs the photo, detects the language across 22 scheduled tongues, and classifies the legal domain — mapping the relevant BNS / BNSS / personal-law sections.",
-    stack: "Claude Vision · Tesseract · spaCy-Indic",
+    stack: "Gemini Vision · OCR · language detect",
   },
   {
     n: "02",
     name: "Strategy Agent",
     desc: "Generates a step-by-step action plan grounded in retrieved statute: what to file, which office, the deadline window, and the documents checklist.",
-    stack: "Claude · RAG over BNS/BNSS/NALSA",
+    stack: "Groq Llama 3.3 · BM25 RAG (BNS/BNSS/HSA/NALSA)",
   },
   {
     n: "03",
     name: "Drafting Agent",
     desc: "Auto-generates the RTI, NALSA Form 1, or BNS-199 police complaint in the user's own language, pre-filled and ready to submit.",
-    stack: "Claude · template engine · Bhashini",
+    stack: "Groq · vernacular drafting · TTS",
   },
   {
     n: "04",
@@ -231,6 +232,69 @@ const LAYERS = [
   ["Human review gate", "A Bar Council-verified advocate reviews every filing and every sensitive case before it leaves.", "Catches: whatever automation missed"],
   ["User verification", "Shows the source and tells the user, in their language, to confirm with the named office before acting.", "Catches: blind over-reliance"],
 ];
+
+function Privacy() {
+  const voice = [
+    ["Voice output", "Every screen and generated document is read aloud in the user's language — usable even by someone who cannot read at all."],
+    ["Voice intake + auto-fill", "The user answers by speaking; speech-to-text fills every form field — they never type a word."],
+    ["Spoken read-back before submit", "The completed form is read back aloud to confirm — the safeguard that lets a non-reader still catch an error."],
+  ];
+  const zk = [
+    ["Verify, don't collect", "Government returns a signed yes/no or document via DigiLocker / Aadhaar eKYC; the raw Aadhaar / PAN number never lands in our database."],
+    ["Client-side E2E encryption", "Sensitive fields are encrypted on the user's device before they reach us — plaintext never exists on our servers."],
+    ["Envelope encryption at rest", "Data keys wrapped by a master key held separately (KMS / Vault) — a stolen DB dump alone is useless."],
+    ["Tokenise, mask & expire", "Store only last-4 + a token; the raw document image is purged in 72h — only the non-sensitive case record persists."],
+  ];
+  return (
+    <section className="border-b border-border">
+      <div className="mx-auto max-w-6xl px-5 py-20">
+        <SectionLabel>Privacy &amp; accessibility</SectionLabel>
+        <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-ink">
+          Privacy &amp; Accessibility by Design
+        </h2>
+        <p className="mt-3 max-w-3xl text-ink-2">
+          Voice-first, so someone who cannot read uses it end to end — on an
+          architecture where even we never hold readable Aadhaar, PAN or bank numbers.
+        </p>
+        <div className="mt-10 grid gap-6 md:grid-cols-2">
+          <div className="rounded-card border border-border bg-surface p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-saffron-600">Voice-First Access</h3>
+            <p className="text-xs font-semibold text-ink-3">a non-reader can complete the whole journey</p>
+            <ul className="mt-4 space-y-3">
+              {voice.map(([t, d]) => (
+                <li key={t}>
+                  <div className="text-sm font-bold text-ink">{t}</div>
+                  <p className="text-sm text-ink-2">{d}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-card border border-border bg-surface p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-green">Zero-Knowledge of Identifiers</h3>
+            <p className="text-xs font-semibold text-ink-3">the platform never stores readable Aadhaar / PAN / bank data</p>
+            <ul className="mt-4 space-y-3">
+              {zk.map(([t, d]) => (
+                <li key={t}>
+                  <div className="text-sm font-bold text-ink">{t}</div>
+                  <p className="text-sm text-ink-2">{d}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="mt-6 rounded-card border border-amber/30 bg-amber-50 p-5">
+          <div className="text-xs font-bold uppercase tracking-wider text-amber">The honest limit</div>
+          <p className="mt-1 text-sm text-ink-2">
+            True zero-knowledge has bounds: when a Bar Council lawyer reviews a filing,
+            that human sees the document at that moment. So the precise claim is — the
+            platform never <em>stores</em> readable sensitive identifiers; access is
+            scoped, consented and fully logged. This is DPDPA data-minimisation, made concrete.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function Trust() {
   return (

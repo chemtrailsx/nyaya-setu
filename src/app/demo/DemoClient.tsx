@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
 import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type LanguageCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,14 @@ const LANG_OPTIONS: { code: string; label: string }[] = [
 const BCP47: Record<string, string> = {
   hi: "hi-IN", en: "en-IN", bn: "bn-IN", ta: "ta-IN", te: "te-IN", mr: "mr-IN", auto: "en-IN",
 };
+
+// Real, free national helplines — tappable to dial on a phone.
+const HELPLINES = [
+  { label: "Free legal aid (NALSA)", num: "15100" },
+  { label: "Women in distress", num: "181" },
+  { label: "Police emergency", num: "112" },
+  { label: "Child helpline", num: "1098" },
+];
 
 // One-click sample documents so judges can test instantly.
 const EXAMPLES = [
@@ -188,6 +196,7 @@ export function DemoClient() {
         {state.results.document && <DocumentPanel results={state.results} speakLang={speakLang} />}
         {state.results.signals && <ConfidencePanel results={state.results} />}
         {state.results.strategy && <PlanPanel results={state.results} speakLang={speakLang} />}
+        {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
@@ -306,7 +315,12 @@ function Meter({ label, value, big, tone = "indigo" }: { label: string; value: n
 
 function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const st = results.strategy!;
-  const spoken = [st.rationale, ...st.steps.map((s) => `${s.order}. ${s.action}`)].filter(Boolean).join(". ");
+  const spoken = [
+    st.rationale,
+    ...st.steps.map((s) => [`${s.order}. ${s.action}`, s.officeAddress, s.contact].filter(Boolean).join(". ")),
+  ]
+    .filter(Boolean)
+    .join(". ");
   return (
     <Card
       title="Action plan"
@@ -326,9 +340,11 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
               <div className="min-w-0">
                 <p className="deva font-semibold text-ink">{s.action}</p>
                 <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-ink-2">
-                  <Info k="Office" v={s.office} />
-                  <Info k="Officer" v={s.officer} />
-                  {s.forms?.length ? <Info k="Forms" v={s.forms.join(", ")} /> : null}
+                  <Info k="Where to go" v={s.office} />
+                  <Info k="Whom to meet" v={s.officer} />
+                  {s.officeAddress ? <InfoWide k="How to reach" v={s.officeAddress} /> : null}
+                  {s.contact ? <InfoWide k="Who to contact" v={s.contact} /> : null}
+                  {s.forms?.length ? <Info k="What to file" v={s.forms.join(", ")} /> : null}
                   <Info k="Fee" v={s.fee} />
                   {s.deadlineDays != null && <Info k="Deadline" v={`${s.deadlineDays} days`} />}
                 </dl>
@@ -360,8 +376,26 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
 
 function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const d = results.draft!;
+  // Placeholders the user must fill, e.g. [नाम / NAME], [पता / ADDRESS].
+  const placeholders = useMemo(() => {
+    const found = `${d.title}\n${d.body}`.match(/\[[^\]\n]{1,48}\]/g) ?? [];
+    return Array.from(new Set(found));
+  }, [d.title, d.body]);
+  const [values, setValues] = useState<Record<string, string>>({});
+
+  const fill = (text: string) => {
+    let out = text;
+    for (const p of placeholders) {
+      const v = values[p]?.trim();
+      if (v) out = out.split(p).join(v);
+    }
+    return out;
+  };
+  const filledBody = fill(d.body);
+  const filledTitle = fill(d.title);
+
   const download = () => {
-    const blob = new Blob([d.body], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([`${filledTitle}\n\n${filledBody}`], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -369,20 +403,99 @@ function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: s
     a.click();
     URL.revokeObjectURL(url);
   };
+
   return (
     <Card
       title="Drafted filing"
       badge={
         <div className="flex items-center gap-2">
-          <ListenButton text={`${d.title}. ${d.body}`} lang={speakLang} />
+          <ListenButton text={`${filledTitle}. ${filledBody}`} lang={speakLang} />
           <button onClick={download} className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600"><Download className="h-3 w-3" />Download</button>
         </div>
       }
     >
-      <p className="mb-2 deva font-bold text-ink break-words" lang={speakLang}>{d.title}</p>
-      <pre className="deva max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface-2 p-4 text-sm leading-relaxed text-ink" lang={speakLang}>{d.body}</pre>
+      {placeholders.length > 0 && (
+        <div className="mb-4 rounded-lg border border-saffron/30 bg-saffron-50 p-3">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-saffron-600">
+            <Mic className="h-3.5 w-3.5" /> Fill your details — type, or tap the mic and speak
+          </div>
+          <div className="mt-2 space-y-2">
+            {placeholders.map((p) => (
+              <FillField
+                key={p}
+                label={p.replace(/[[\]]/g, "")}
+                value={values[p] ?? ""}
+                lang={speakLang}
+                onChange={(v) => setValues((s) => ({ ...s, [p]: v }))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="mb-2 deva font-bold text-ink break-words" lang={speakLang}>{filledTitle}</p>
+      <pre className="deva max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface-2 p-4 text-sm leading-relaxed text-ink" lang={speakLang}>{filledBody}</pre>
       <p className="mt-2 text-xs text-ink-3">⚠ A Bar Council-verified advocate reviews any filing before it goes to court. Verify with the named office before acting.</p>
     </Card>
+  );
+}
+
+// Minimal typing for the Web Speech recognition API (not in the standard DOM lib).
+type SpeechRec = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+  onerror: () => void;
+  onend: () => void;
+  start: () => void;
+};
+
+/** One fillable field: text input + voice (ASR) mic in the user's language. */
+function FillField({ label, value, lang, onChange }: { label: string; value: string; lang: string; onChange: (v: string) => void }) {
+  const [listening, setListening] = useState(false);
+  const win = typeof window !== "undefined"
+    ? (window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec })
+    : undefined;
+  const SR = win?.SpeechRecognition ?? win?.webkitSpeechRecognition;
+
+  const listen = () => {
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = BCP47[lang] ?? "en-IN";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      onChange(e.results[0][0].transcript);
+      setListening(false);
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => setListening(false);
+    rec.start();
+    setListening(true);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="deva w-24 shrink-0 truncate text-xs font-semibold text-ink-2" title={label}>{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="type or speak"
+        className="deva min-w-0 flex-1 rounded border border-border bg-surface px-2 py-1.5 text-sm text-ink"
+      />
+      {SR && (
+        <button
+          onClick={listen}
+          aria-label="Speak this answer"
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+            listening ? "border-saffron bg-saffron text-white animate-pulse-dot" : "border-border bg-surface text-indigo hover:bg-indigo-50",
+          )}
+        >
+          <Mic className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -431,6 +544,37 @@ function Info({ k, v }: { k: string; v: string }) {
     <div className="min-w-0">
       <dt className="text-ink-3">{k}</dt>
       <dd className="deva truncate font-semibold text-ink" title={v}>{v}</dd>
+    </div>
+  );
+}
+function HelplinesCard({ speakLang }: { speakLang: string }) {
+  const spoken = HELPLINES.map((h) => `${h.label}, ${h.num.split("").join(" ")}`).join(". ");
+  return (
+    <Card title="Free helplines — tap to call" badge={<ListenButton text={spoken} lang={speakLang} />}>
+      <div className="grid grid-cols-2 gap-2">
+        {HELPLINES.map((h) => (
+          <a
+            key={h.num}
+            href={`tel:${h.num}`}
+            className="rounded-lg border border-border bg-surface-2 p-3 transition hover:border-saffron"
+          >
+            <div className="text-xs text-ink-3">{h.label}</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-lg font-extrabold text-indigo">
+              <Phone className="h-4 w-4" />
+              {h.num}
+            </div>
+          </a>
+        ))}
+      </div>
+    </Card>
+  );
+}
+/** Full-width field that wraps (for addresses / contact details). */
+function InfoWide({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="col-span-2 min-w-0">
+      <dt className="text-ink-3">{k}</dt>
+      <dd className="deva font-semibold text-ink break-words">{v}</dd>
     </div>
   );
 }

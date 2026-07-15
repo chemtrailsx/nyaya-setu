@@ -119,8 +119,10 @@ Produce a grounded action plan as this exact JSON:
     {
       "order": <1-based>,
       "action": "<what to do, written in ${langName}, in simple words a non-lawyer understands>",
-      "office": "<the specific office/authority>",
+      "office": "<the specific office/authority to go to>",
+      "officeAddress": "<in ${langName}: how to find/reach that office in plain terms, e.g. 'the Tehsil office at your block/taluk headquarters' or 'your nearest police station'>",
       "officer": "<officer title, e.g. Station House Officer, Tehsildar>",
+      "contact": "<who to contact + a real helpline where relevant: NALSA free legal aid 15100; Women helpline 181; Police 112. In ${langName}.>",
       "forms": ["<form name/number>"],
       "documents": ["<supporting document to attach>"],
       "deadlineDays": <number or null>,
