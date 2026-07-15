@@ -269,6 +269,15 @@ function DocumentPanel({ results, speakLang }: { results: CaseResults; speakLang
       }
     >
       <p className="deva text-ink" lang={speakLang}>{d.summary}</p>
+      {d.redactions?.length ? (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-green/30 bg-green-50 p-2.5">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-green" />
+          <p className="text-xs text-ink-2">
+            <span className="font-bold text-green">{d.redactions.length} identifier{d.redactions.length > 1 ? "s" : ""} masked</span>{" "}
+            ({Array.from(new Set(d.redactions.map((r) => r.type.replace("_", " ")))).join(", ")}). Readable Aadhaar / PAN / phone numbers are never stored, shown, or sent to the other agents — only the last 4 digits are kept.
+          </p>
+        </div>
+      ) : null}
       {d.extractedText && (
         <details className="mt-3">
           <summary className="cursor-pointer text-xs font-semibold text-ink-3">Show extracted text (OCR)</summary>

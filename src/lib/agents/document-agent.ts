@@ -6,6 +6,7 @@
  * against retrieved statute, so a wrong guess here cannot become filed law.
  */
 import { getVisionLLM } from "@/lib/llm";
+import { redactIdentifiers } from "@/lib/privacy/redact";
 import { SUPPORTED_LANGUAGES } from "@/lib/types";
 import type { DocumentAgentResult, ImageInput, LanguageCode } from "@/lib/types";
 
@@ -47,18 +48,24 @@ export async function runDocumentAgent(
     { system: SYSTEM, maxTokens: 4096, temperature: 0 },
   );
 
+  // ZERO-KNOWLEDGE OF IDENTIFIERS: mask Aadhaar/PAN/phone the instant they are
+  // read, before the text flows to any other agent, the log, or the UI.
+  const redactedText = redactIdentifiers(result.extractedText ?? "");
+  const redactedSummary = redactIdentifiers(result.summary ?? "");
+
   // Defensive normalisation — clamp confidences and default missing fields.
   const clamp = (n: unknown) => Math.min(1, Math.max(0, Number(n) || 0));
   return {
-    extractedText: result.extractedText ?? "",
+    extractedText: redactedText.text,
     language: (["hi", "en", "bn", "ta", "te", "mr"].includes(result.language)
       ? result.language
       : "en") as DocumentAgentResult["language"],
     languageConfidence: clamp(result.languageConfidence),
     category: result.category ?? "other",
-    summary: result.summary ?? "",
+    summary: redactedSummary.text,
     sections: Array.isArray(result.sections) ? result.sections.slice(0, 4) : [],
     ocrConfidence: clamp(result.ocrConfidence),
     classificationConfidence: clamp(result.classificationConfidence),
+    redactions: [...redactedText.vault, ...redactedSummary.vault],
   };
 }

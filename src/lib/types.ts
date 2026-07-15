@@ -97,6 +97,9 @@ export interface DocumentAgentResult {
   sections: { code: LegalCode; section: string; why: string }[];
   ocrConfidence: number;
   classificationConfidence: number;
+  /** Identifiers (Aadhaar/PAN/phone) masked at OCR time — only type + last-4
+   *  are retained; readable numbers never propagate or persist. */
+  redactions: { type: string; last4: string; token: string }[];
 }
 
 export interface ActionStep {
