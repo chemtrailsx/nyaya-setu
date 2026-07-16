@@ -69,7 +69,9 @@ export async function POST(request: Request) {
       }
     });
 
-    return twiml("🙏 Got your document. Reading it now — I'll send your step-by-step plan in a few seconds.");
+    return twiml(
+      "🙏 दस्तावेज़ मिल गया! पढ़ रहा हूँ — कुछ ही सेकंड में आपकी पूरी योजना भेजता हूँ।\n(Got your document — sending your full plan in a few seconds.)",
+    );
   }
 
   // Text only → welcome / instructions.
