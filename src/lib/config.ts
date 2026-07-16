@@ -40,6 +40,12 @@ export const config = {
     apiKey: groqKey,
     model: process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct",
   },
+  twilio: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID || "",
+    authToken: process.env.TWILIO_AUTH_TOKEN || "",
+    // The WhatsApp-enabled sender, e.g. "whatsapp:+14155238886" (Twilio sandbox).
+    from: process.env.TWILIO_WHATSAPP_FROM || "",
+  },
   supabase: {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
@@ -56,6 +62,8 @@ export const config = {
 export const hasGemini = () => config.gemini.apiKey.length > 0;
 export const hasAnthropic = () => config.anthropic.apiKey.length > 0;
 export const hasGroq = () => config.groq.apiKey.length > 0;
+export const hasTwilio = () =>
+  config.twilio.accountSid.length > 0 && config.twilio.authToken.length > 0 && config.twilio.from.length > 0;
 /** Any LLM configured at all? */
 export const hasLLM = () => hasGemini() || hasAnthropic() || hasGroq();
 /** Embeddings available? (only Gemini free embeddings for now) */
