@@ -62,6 +62,19 @@ export function getTextLLM(): LLMProvider {
   return chain.length === 1 ? chain[0] : withFallback(chain);
 }
 
+/** Free-form vernacular chat: prefer Gemini (most reliable Indic-script
+ *  generation; Groq's smaller models can degenerate on Devanagari-heavy input),
+ *  then Groq, then Claude — with fallback. */
+export function getChatLLM(): LLMProvider {
+  if (config.provider === "claude") return claudeProvider;
+  const chain: LLMProvider[] = [];
+  if (hasGemini()) chain.push(geminiProvider);
+  if (hasGroq()) chain.push(groqProvider);
+  if (hasAnthropic()) chain.push(claudeProvider);
+  if (chain.length === 0) return claudeProvider;
+  return chain.length === 1 ? chain[0] : withFallback(chain);
+}
+
 /** Vision/OCR: prefer Gemini (best Indic OCR). */
 export function getVisionLLM(): LLMProvider {
   if (config.provider === "claude") return claudeProvider;

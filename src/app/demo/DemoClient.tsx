@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic } from "lucide-react";
+import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic, Send, MessageCircle } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
 import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type LanguageCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -212,6 +212,9 @@ export function DemoClient() {
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
+        {state.done && state.results.document?.isLegalDocument && (
+          <ChatPanel results={state.results} speakLang={speakLang} />
+        )}
       </div>
     </div>
   );
@@ -471,22 +474,22 @@ type SpeechRec = {
   start: () => void;
 };
 
-/** One fillable field: text input + voice (ASR) mic in the user's language. */
-function FillField({ label, value, lang, onChange }: { label: string; value: string; lang: string; onChange: (v: string) => void }) {
+/** A microphone button: speech-to-text in the user's language (Web Speech ASR). */
+function VoiceMic({ lang, onResult }: { lang: string; onResult: (t: string) => void }) {
   const [listening, setListening] = useState(false);
   const win = typeof window !== "undefined"
     ? (window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec })
     : undefined;
   const SR = win?.SpeechRecognition ?? win?.webkitSpeechRecognition;
+  if (!SR) return null;
 
   const listen = () => {
-    if (!SR) return;
     const rec = new SR();
     rec.lang = BCP47[lang] ?? "en-IN";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
-      onChange(e.results[0][0].transcript);
+      onResult(e.results[0][0].transcript);
       setListening(false);
     };
     rec.onerror = () => setListening(false);
@@ -496,6 +499,22 @@ function FillField({ label, value, lang, onChange }: { label: string; value: str
   };
 
   return (
+    <button
+      onClick={listen}
+      aria-label="Speak"
+      className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+        listening ? "border-saffron bg-saffron text-white animate-pulse-dot" : "border-border bg-surface text-indigo hover:bg-indigo-50",
+      )}
+    >
+      <Mic className="h-4 w-4" />
+    </button>
+  );
+}
+
+/** One fillable field: text input + voice (ASR) mic in the user's language. */
+function FillField({ label, value, lang, onChange }: { label: string; value: string; lang: string; onChange: (v: string) => void }) {
+  return (
     <div className="flex items-center gap-2">
       <span className="deva w-24 shrink-0 truncate text-xs font-semibold text-ink-2" title={label}>{label}</span>
       <input
@@ -504,19 +523,93 @@ function FillField({ label, value, lang, onChange }: { label: string; value: str
         placeholder="type or speak"
         className="deva min-w-0 flex-1 rounded border border-border bg-surface px-2 py-1.5 text-sm text-ink"
       />
-      {SR && (
-        <button
-          onClick={listen}
-          aria-label="Speak this answer"
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-            listening ? "border-saffron bg-saffron text-white animate-pulse-dot" : "border-border bg-surface text-indigo hover:bg-indigo-50",
-          )}
-        >
-          <Mic className="h-4 w-4" />
-        </button>
-      )}
+      <VoiceMic lang={lang} onResult={onChange} />
     </div>
+  );
+}
+
+/** Follow-up Q&A about the case — typed or voice, grounded in the document + law. */
+function ChatPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
+  const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const send = async (q?: string) => {
+    const question = (q ?? input).trim();
+    if (!question || loading) return;
+    setInput("");
+    const next = [...messages, { role: "user" as const, text: question }];
+    setMessages(next);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          language: speakLang,
+          context: {
+            summary: results.document?.summary,
+            category: results.document?.category,
+            steps: results.strategy?.steps?.map((s) => ({ order: s.order, action: s.action, office: s.office, fee: s.fee })),
+            nalsaEligible: results.strategy?.nalsaEligible,
+          },
+          history: messages.slice(-6),
+        }),
+      });
+      const data = await res.json();
+      setMessages([...next, { role: "assistant", text: data.answer ?? data.error ?? "Sorry, please try again." }]);
+    } catch {
+      setMessages([...next, { role: "assistant", text: "Sorry, please try again." }]);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Card title="Ask a question" badge={<MessageCircle className="h-4 w-4 text-indigo" />}>
+      {messages.length === 0 && (
+        <p className="text-sm text-ink-3">
+          Have a question about your case? Type or tap the mic and ask in your own language — e.g. &ldquo;Do I have to pay?&rdquo;, &ldquo;Which documents do I need?&rdquo;
+        </p>
+      )}
+      {messages.length > 0 && (
+        <div className="space-y-2">
+          {messages.map((m, i) =>
+            m.role === "user" ? (
+              <div key={i} className="deva ml-8 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-ink">{m.text}</div>
+            ) : (
+              <div key={i} className="mr-8 rounded-lg bg-surface-2 px-3 py-2">
+                <p className="deva text-sm text-ink" lang={speakLang}>{m.text}</p>
+                <div className="mt-1"><ListenButton text={m.text} lang={speakLang} /></div>
+              </div>
+            ),
+          )}
+          {loading && (
+            <div className="mr-8 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-3">
+              <Loader2 className="h-4 w-4 animate-spin" /> …
+            </div>
+          )}
+        </div>
+      )}
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder="Type your question…"
+          className="deva min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+        />
+        <VoiceMic lang={speakLang} onResult={(t) => send(t)} />
+        <button
+          onClick={() => send()}
+          disabled={loading || !input.trim()}
+          aria-label="Send"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo text-white hover:bg-indigo-600 disabled:opacity-40"
+        >
+          <Send className="h-4 w-4" />
+        </button>
+      </div>
+    </Card>
   );
 }
 
