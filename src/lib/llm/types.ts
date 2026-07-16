@@ -9,7 +9,11 @@ export interface CompletionOpts {
   temperature?: number;
 }
 
-export type ImageMediaType = "image/jpeg" | "image/png" | "image/webp";
+export type ImageMediaType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/webp"
+  | "application/pdf";
 
 export interface LLMProvider {
   readonly name: string;

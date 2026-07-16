@@ -7,6 +7,7 @@
 import type { CaseState, LanguageCode } from "@/lib/types";
 
 interface Labels {
+  notLegal: string;
   meaning: string;
   whatToDo: string;
   idsMasked: (n: number) => string;
@@ -19,6 +20,7 @@ interface Labels {
 
 const LABELS: Record<LanguageCode, Labels> = {
   en: {
+    notLegal: "⚠️ This doesn't look like a legal document. Please send a photo or PDF of an actual legal paper — an FIR, court notice, land paper, or legal letter.",
     meaning: "📄 *What this means:*",
     whatToDo: "✅ *What to do:*",
     idsMasked: (n) => `🔒 ${n} personal ID(s) (Aadhaar/PAN/phone) were hidden for your safety.`,
@@ -31,6 +33,7 @@ const LABELS: Record<LanguageCode, Labels> = {
       "_This is first-response guidance, not a final legal opinion. Please confirm with the office named above. A lawyer reviews anything filed in court._",
   },
   hi: {
+    notLegal: "⚠️ यह कानूनी दस्तावेज़ नहीं लगता। कृपया किसी असली कानूनी कागज़ (FIR, कोर्ट नोटिस, ज़मीन का कागज़, या कानूनी पत्र) की फ़ोटो या PDF भेजें।",
     meaning: "📄 *इसका मतलब:*",
     whatToDo: "✅ *क्या करना है:*",
     idsMasked: (n) => `🔒 आपकी सुरक्षा के लिए ${n} व्यक्तिगत पहचान (आधार/पैन/फ़ोन) छिपाई गई।`,
@@ -43,6 +46,7 @@ const LABELS: Record<LanguageCode, Labels> = {
       "_यह प्रारंभिक मार्गदर्शन है, अंतिम कानूनी राय नहीं। कृपया ऊपर बताए गए कार्यालय से पुष्टि करें। अदालत में दाखिल किसी भी दस्तावेज़ की समीक्षा एक वकील द्वारा की जाती है।_",
   },
   bn: {
+    notLegal: "⚠️ এটি আইনি নথি বলে মনে হচ্ছে না। অনুগ্রহ করে একটি প্রকৃত আইনি কাগজ (FIR, আদালতের নোটিশ, জমির কাগজ, বা আইনি চিঠি)-এর ছবি বা PDF পাঠান।",
     meaning: "📄 *এর মানে কী:*",
     whatToDo: "✅ *কী করবেন:*",
     idsMasked: (n) => `🔒 আপনার নিরাপত্তার জন্য ${n}টি ব্যক্তিগত পরিচয় (আধার/প্যান/ফোন) লুকানো হয়েছে।`,
@@ -55,6 +59,7 @@ const LABELS: Record<LanguageCode, Labels> = {
       "_এটি প্রাথমিক নির্দেশনা, চূড়ান্ত আইনি মতামত নয়। উপরে উল্লিখিত অফিসে নিশ্চিত করুন। আদালতে দাখিল করা যেকোনো নথি একজন আইনজীবী পর্যালোচনা করেন।_",
   },
   ta: {
+    notLegal: "⚠️ இது சட்ட ஆவணமாகத் தெரியவில்லை. உண்மையான சட்ட ஆவணத்தின் (FIR, நீதிமன்ற அறிவிப்பு, நில ஆவணம், அல்லது சட்டக் கடிதம்) புகைப்படம் அல்லது PDF அனுப்பவும்.",
     meaning: "📄 *இதன் பொருள்:*",
     whatToDo: "✅ *என்ன செய்ய வேண்டும்:*",
     idsMasked: (n) => `🔒 உங்கள் பாதுகாப்பிற்காக ${n} தனிப்பட்ட அடையாளங்கள் (ஆதார்/பான்/தொலைபேசி) மறைக்கப்பட்டன.`,
@@ -67,6 +72,7 @@ const LABELS: Record<LanguageCode, Labels> = {
       "_இது முதற்கட்ட வழிகாட்டுதல், இறுதி சட்ட ஆலோசனை அல்ல. மேலே குறிப்பிட்ட அலுவலகத்தில் உறுதிப்படுத்தவும். நீதிமன்றத்தில் தாக்கல் செய்யப்படும் ஆவணங்களை வழக்கறிஞர் சரிபார்ப்பார்._",
   },
   te: {
+    notLegal: "⚠️ ఇది న్యాయ పత్రంలా అనిపించడం లేదు. దయచేసి అసలైన న్యాయ పత్రం (FIR, కోర్టు నోటీసు, భూమి పత్రం, లేదా న్యాయ లేఖ) ఫోటో లేదా PDF పంపండి.",
     meaning: "📄 *దీని అర్థం:*",
     whatToDo: "✅ *ఏమి చేయాలి:*",
     idsMasked: (n) => `🔒 మీ భద్రత కోసం ${n} వ్యక్తిగత గుర్తింపులు (ఆధార్/పాన్/ఫోన్) దాచబడ్డాయి.`,
@@ -79,6 +85,7 @@ const LABELS: Record<LanguageCode, Labels> = {
       "_ఇది ప్రాథమిక మార్గదర్శకం, తుది న్యాయ అభిప్రాయం కాదు. పైన పేర్కొన్న కార్యాలయంలో నిర్ధారించుకోండి. కోర్టులో దాఖలు చేసే ఏ పత్రాన్నైనా న్యాయవాది సమీక్షిస్తారు._",
   },
   mr: {
+    notLegal: "⚠️ हे कायदेशीर कागदपत्र वाटत नाही. कृपया खऱ्या कायदेशीर कागदाची (FIR, कोर्ट नोटीस, जमिनीचा कागद, किंवा कायदेशीर पत्र) फोटो किंवा PDF पाठवा.",
     meaning: "📄 *याचा अर्थ:*",
     whatToDo: "✅ *काय करावे:*",
     idsMasked: (n) => `🔒 तुमच्या सुरक्षिततेसाठी ${n} वैयक्तिक ओळख (आधार/पॅन/फोन) लपवण्यात आल्या.`,
@@ -94,9 +101,14 @@ const LABELS: Record<LanguageCode, Labels> = {
 
 export function formatCaseForWhatsApp(state: CaseState): string {
   const L = LABELS[state.language] ?? LABELS.en;
-  const parts: string[] = ["*NyayaSetu · न्याय सेतु*"];
   const d = state.document;
 
+  // Not a legal document → warn instead of fabricating a plan.
+  if (d && !d.isLegalDocument) {
+    return `*NyayaSetu · न्याय सेतु*\n\n${L.notLegal}${d.summary ? `\n\n${d.summary}` : ""}`;
+  }
+
+  const parts: string[] = ["*NyayaSetu · न्याय सेतु*"];
   if (d?.summary) parts.push(`\n${L.meaning}\n${d.summary}`);
   if (d?.redactions?.length) parts.push(`\n${L.idsMasked(d.redactions.length)}`);
 

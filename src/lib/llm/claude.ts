@@ -59,14 +59,12 @@ export const claudeProvider: LLMProvider = {
     prompt: string,
     opts: CompletionOpts = {},
   ) {
-    const raw = await text(
-      [
-        { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
-        { type: "text", text: prompt },
-      ],
-      { temperature: 0, ...opts },
-      true,
-    );
+    // Anthropic takes PDFs via a document block, images via an image block.
+    const block: Anthropic.DocumentBlockParam | Anthropic.ImageBlockParam =
+      mediaType === "application/pdf"
+        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: imageBase64 } }
+        : { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } };
+    const raw = await text([block, { type: "text", text: prompt }], { temperature: 0, ...opts }, true);
     return parseJSON<T>(raw);
   },
 };

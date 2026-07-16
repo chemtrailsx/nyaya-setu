@@ -99,7 +99,7 @@ export function DemoClient() {
       <div className="space-y-6">
         <div className="rounded-card border border-border bg-surface p-5 shadow-sm">
           <h2 className="text-base font-extrabold text-ink">Take a photo of your document</h2>
-          <p className="mt-0.5 text-xs text-ink-3">FIR, land paper, court notice, legal letter — any language.</p>
+          <p className="mt-0.5 text-xs text-ink-3">FIR, land paper, court notice, legal letter — photo, PDF or Word, any language.</p>
           {!image ? (
             <div className="mt-3 grid grid-cols-2 gap-3">
               <button
@@ -119,8 +119,15 @@ export function DemoClient() {
             </div>
           ) : (
             <div className="mt-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={image.dataUrl} alt={image.name} className="max-h-56 w-full rounded-lg border border-border object-contain bg-surface-2" />
+              {image.mediaType.startsWith("image/") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={image.dataUrl} alt={image.name} className="max-h-56 w-full rounded-lg border border-border object-contain bg-surface-2" />
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 p-4">
+                  <FileText className="h-8 w-8 text-indigo" />
+                  <span className="min-w-0 truncate text-sm font-semibold text-ink">{image.name}</span>
+                </div>
+              )}
               <button
                 onClick={() => fileRef.current?.click()}
                 className="mt-2 text-xs font-semibold text-indigo hover:underline"
@@ -131,7 +138,9 @@ export function DemoClient() {
           )}
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
-          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+          <input ref={fileRef} type="file"
+            accept="image/png,image/jpeg,image/webp,application/pdf,.pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            className="hidden"
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
 
           <div className="mt-4">
@@ -193,7 +202,10 @@ export function DemoClient() {
           <div className="rounded-card border border-red/30 bg-red-50 p-4 text-sm text-red">{state.error}</div>
         )}
         {!hasRun && <EmptyState />}
-        {state.results.document && <DocumentPanel results={state.results} speakLang={speakLang} />}
+        {state.results.document && !state.results.document.isLegalDocument && (
+          <NotLegalCard results={state.results} speakLang={speakLang} />
+        )}
+        {state.results.document?.isLegalDocument && <DocumentPanel results={state.results} speakLang={speakLang} />}
         {state.results.signals && <ConfidencePanel results={state.results} />}
         {state.results.strategy && <PlanPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
@@ -653,6 +665,25 @@ function ListenButton({ text, lang }: { text: string; lang: string }) {
     </button>
   );
 }
+function NotLegalCard({ results, speakLang }: { results: CaseResults; speakLang: string }) {
+  const d = results.document!;
+  return (
+    <section className="rounded-card border border-amber/40 bg-amber-50 p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <FileText className="h-5 w-5 text-amber" />
+        <h3 className="text-sm font-bold text-amber">This doesn&apos;t look like a legal document</h3>
+        <div className="ml-auto"><ListenButton text={d.summary} lang={speakLang} /></div>
+      </div>
+      {d.summary && <p className="deva mt-2 text-sm text-ink-2" lang={speakLang}>{d.summary}</p>}
+      <p className="mt-3 text-sm text-ink-2">
+        Please upload a photo, PDF or Word file of an actual legal document — an
+        <strong> FIR, court notice, land/property paper, summons, or legal letter</strong>. I can only
+        help with legal documents, and I won&apos;t guess a plan for anything else.
+      </p>
+    </section>
+  );
+}
+
 function EmptyState() {
   return (
     <div className="flex h-full min-h-64 flex-col items-center justify-center rounded-card border border-dashed border-border bg-surface p-10 text-center">

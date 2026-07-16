@@ -60,10 +60,17 @@ export type CaseCategory =
   | "consumer"
   | "other";
 
-/** An uploaded document image, base64-encoded, fed to the Document Agent. */
+/** An uploaded document (photo, PDF or Word), base64-encoded. */
+export type DocMediaType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/webp"
+  | "application/pdf"
+  | "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 export interface ImageInput {
   base64: string;
-  mediaType: "image/jpeg" | "image/png" | "image/webp";
+  mediaType: DocMediaType;
 }
 
 // ─── Agents ───────────────────────────────────────────────────────────────
@@ -97,6 +104,10 @@ export interface DocumentAgentResult {
   sections: { code: LegalCode; section: string; why: string }[];
   ocrConfidence: number;
   classificationConfidence: number;
+  /** False when the upload is not an actual legal/official document (e.g. a
+   *  diagram, selfie, receipt) — the pipeline then stops and warns instead of
+   *  fabricating a legal plan. */
+  isLegalDocument: boolean;
   /** Identifiers (Aadhaar/PAN/phone) masked at OCR time — only type + last-4
    *  are retained; readable numbers never propagate or persist. */
   redactions: { type: string; last4: string; token: string }[];

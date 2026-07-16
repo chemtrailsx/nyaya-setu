@@ -88,6 +88,17 @@ export async function runPipeline(
     );
     emit({ type: "agent_result", agent: "document", result: document });
 
+    // ── Guard: only proceed for genuine legal documents ────────────────────
+    if (!document.isLegalDocument) {
+      log(
+        "system",
+        "done",
+        "This doesn't look like a legal document. Please upload a photo, PDF or Word file of an FIR, court notice, land paper, or legal letter.",
+      );
+      emit({ type: "done", state });
+      return state;
+    }
+
     // ── 02 Strategy (grounded RAG) ─────────────────────────────────────────
     log("strategy", "running", "Retrieving statute and generating a grounded action plan…");
     const strategy = await runStrategyAgent(document, outputLang);
