@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type {
+  AgentName,
   CaseEvent,
   DocumentAgentResult,
   DraftAgentResult,
@@ -88,16 +89,28 @@ export function useCaseStream() {
   return { state, run, reset };
 }
 
+/** Agent name → the key its result is stored under. The Drafting Agent is named
+ *  "drafting" but its result lives under `draft`, so this mapping is required —
+ *  without it the forms packet is silently dropped. */
+const RESULT_KEY: Record<AgentName, keyof CaseResults> = {
+  document: "document",
+  strategy: "strategy",
+  drafting: "draft",
+  tracking: "tracking",
+  escalation: "escalation",
+};
+
 function apply(evt: StreamEvent, setState: React.Dispatch<React.SetStateAction<CaseStreamState>>) {
   setState((s) => {
     const results = { ...s.results };
     switch (evt.type) {
       case "event":
         return { ...s, events: [...s.events, evt.event] };
-      case "agent_result":
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (results as any)[evt.agent] = evt.result;
+      case "agent_result": {
+        const key = RESULT_KEY[evt.agent];
+        if (key) (results as Record<string, unknown>)[key] = evt.result;
         return { ...s, results };
+      }
       case "confidence":
         return { ...s, results: { ...results, ensemble: evt.ensemble, signals: evt.signals } };
       case "error":
