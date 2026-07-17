@@ -137,17 +137,28 @@ export interface StrategyAgentResult {
 
 export type DraftKind =
   | "rti_application"
-  | "nalsa_form_1"
+  | "nalsa_form_1" // DLSA/NALSA free legal-aid application
   | "fir_complaint" // BNSS 173(4)/175(3) + BNS 199
   | "mutation_objection"
-  | "womens_commission_letter";
+  | "womens_commission_letter"
+  | "legal_heir_certificate"
+  | "appeal"
+  | "civil_suit"
+  | "other";
+
+/** One ready-to-file document in the user's packet. */
+export interface DraftDocument {
+  kind: DraftKind;
+  title: string; // document title, in the user's language
+  purpose: string; // why/when she needs this, in her language
+  office: string; // where to submit it
+  body: string; // the full fillable draft, in the user's language
+}
 
 export interface DraftAgentResult {
-  kind: DraftKind;
-  title: string;
-  body: string; // the full draft, in the user's language
+  /** The packet of forms she must actually file — ordered by what to do first. */
+  documents: DraftDocument[];
   language: LanguageCode;
-  fieldsFilled: Record<string, string>;
   draftConfidence: number;
 }
 

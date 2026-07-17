@@ -118,7 +118,11 @@ export async function runPipeline(
       const draft = await runDraftingAgent(document, strategy, outputLang);
       state.draft = draft;
       draftConfidence = draft.draftConfidence;
-      log("drafting", "done", `Draft "${draft.kind}" prepared (confidence ${draft.draftConfidence}).`);
+      log(
+        "drafting",
+        "done",
+        `${draft.documents.length} form(s) drafted: ${draft.documents.map((d) => d.kind).join(", ")} (confidence ${draft.draftConfidence}).`,
+      );
       emit({ type: "agent_result", agent: "drafting", result: draft });
     }
 

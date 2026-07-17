@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic, Send, MessageCircle, X } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
-import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type LanguageCode } from "@/lib/types";
+import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type DraftDocument, type LanguageCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // Output-language options (the user picks per run; "auto" follows the document).
@@ -209,12 +209,12 @@ export function DemoClient() {
           <NotLegalCard results={state.results} speakLang={speakLang} />
         )}
         {state.results.document?.isLegalDocument && <DocumentPanel results={state.results} speakLang={speakLang} />}
-        {state.results.signals && <ConfidencePanel results={state.results} />}
         {state.results.strategy && <PlanPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
+        {state.results.signals && <ConfidencePanel results={state.results} />}
       </div>
       <FloatingChat
         results={state.results}
@@ -313,14 +313,28 @@ function ConfidencePanel({ results }: { results: CaseResults }) {
   const ens = results.ensemble ?? 0;
   const escalated = !!results.escalation;
   return (
-    <Card title="Calibrated confidence" badge={<Chip tone={escalated ? "amber" : "green"}>{escalated ? "Escalated to human" : "Cleared threshold"}</Chip>}>
-      <div className="grid grid-cols-3 gap-3">
-        {([["OCR", s.ocr], ["Classification", s.classification], ["Retrieval", s.retrieval]] as const).map(([k, v]) => (
-          <Meter key={k} label={k} value={v} />
-        ))}
+    <Card
+      title="How sure is the AI?"
+      badge={<Chip tone={escalated ? "amber" : "green"}>{escalated ? "Sent to a lawyer" : "Confident enough"}</Chip>}
+    >
+      <p className="mb-4 text-xs leading-relaxed text-ink-2">
+        Before it trusts itself, NyayaSetu scores <strong>three independent checks</strong> — how clearly it
+        read your document, how sure it is of the case type, and how well it matched <em>real</em> law. They
+        combine into one score. If that score falls below <strong>0.72</strong>, the case is automatically
+        handed to a <strong>human lawyer</strong> instead of guessing. That&apos;s the safety switch.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Meter label="Reading the document" value={s.ocr} />
+        <Meter label="Understanding the case" value={s.classification} />
+        <Meter label="Matching real law" value={s.retrieval} />
       </div>
       <div className="mt-4 border-t border-border pt-3">
-        <Meter label={`Ensemble (threshold ${(0.72).toFixed(2)})`} value={ens} big tone={escalated ? "amber" : "green"} />
+        <Meter label="Overall score (needs 0.72+)" value={ens} big tone={escalated ? "amber" : "green"} />
+        <p className="mt-2 text-xs text-ink-3">
+          {escalated
+            ? "Below the safety line — a Bar Council-verified lawyer is reviewing this case instead."
+            : "Above the safety line, so the plan is shown. You're still told to confirm with the office named above."}
+        </p>
       </div>
     </Card>
   );
@@ -330,11 +344,9 @@ function Meter({ label, value, big, tone = "indigo" }: { label: string; value: n
   const pct = Math.round(value * 100);
   const color = tone === "green" ? "var(--green)" : tone === "amber" ? "var(--amber)" : "var(--indigo)";
   return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs text-ink-3">{label}</span>
-        <span className={cn("font-bold", big ? "text-lg" : "text-sm")} style={{ color }}>{value.toFixed(2)}</span>
-      </div>
+    <div className="min-w-0">
+      <div className="text-xs leading-tight text-ink-3">{label}</div>
+      <div className={cn("mt-0.5 font-bold", big ? "text-2xl" : "text-lg")} style={{ color }}>{value.toFixed(2)}</div>
       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
       </div>
@@ -403,14 +415,35 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
   );
 }
 
+/** The packet of forms the user must actually file, in order. */
 function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const d = results.draft!;
-  // Placeholders the user must fill, e.g. [नाम / NAME], [पता / ADDRESS].
-  const placeholders = useMemo(() => {
-    const found = `${d.title}\n${d.body}`.match(/\[[^\]\n]{1,48}\]/g) ?? [];
-    return Array.from(new Set(found));
-  }, [d.title, d.body]);
+  if (!d.documents?.length) return null;
+  return (
+    <Card title={`Forms to file (${d.documents.length})`} badge={<Chip tone="green">Fill by voice</Chip>}>
+      <p className="mb-3 text-xs text-ink-2">
+        These are the papers you need to submit, in order. Fill your details once — by typing or
+        <strong> tapping the mic and speaking</strong> — then download and print each.
+      </p>
+      <div className="space-y-3">
+        {d.documents.map((doc, i) => (
+          <FormCard key={i} doc={doc} index={i} speakLang={speakLang} />
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-ink-3">⚠ A Bar Council-verified advocate reviews any filing before it goes to court. Verify with the named office before acting.</p>
+    </Card>
+  );
+}
+
+/** One fillable form in the packet: voice/typed fields, live preview, download. */
+function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number; speakLang: string }) {
+  const [open, setOpen] = useState(index === 0);
   const [values, setValues] = useState<Record<string, string>>({});
+
+  const placeholders = useMemo(() => {
+    const found = `${doc.title}\n${doc.body}`.match(/\[[^\]\n]{1,48}\]/g) ?? [];
+    return Array.from(new Set(found));
+  }, [doc.title, doc.body]);
 
   const fill = (text: string) => {
     let out = text;
@@ -420,51 +453,64 @@ function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: s
     }
     return out;
   };
-  const filledBody = fill(d.body);
-  const filledTitle = fill(d.title);
+  const filledTitle = fill(doc.title);
+  const filledBody = fill(doc.body);
+  const remaining = placeholders.filter((p) => !values[p]?.trim()).length;
 
   const download = () => {
     const blob = new Blob([`${filledTitle}\n\n${filledBody}`], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${d.kind}.txt`;
+    a.download = `${doc.kind}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
-    <Card
-      title="Drafted filing"
-      badge={
-        <div className="flex items-center gap-2">
-          <ListenButton text={`${filledTitle}. ${filledBody}`} lang={speakLang} />
-          <button onClick={download} className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600"><Download className="h-3 w-3" />Download</button>
-        </div>
-      }
-    >
-      {placeholders.length > 0 && (
-        <div className="mb-4 rounded-lg border border-saffron/30 bg-saffron-50 p-3">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-saffron-600">
-            <Mic className="h-3.5 w-3.5" /> Fill your details — type, or tap the mic and speak
-          </div>
-          <div className="mt-2 space-y-2">
-            {placeholders.map((p) => (
-              <FillField
-                key={p}
-                label={p.replace(/[[\]]/g, "")}
-                value={values[p] ?? ""}
-                lang={speakLang}
-                onChange={(v) => setValues((s) => ({ ...s, [p]: v }))}
-              />
-            ))}
+    <div className="rounded-lg border border-border bg-surface-2">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-start gap-2 p-3 text-left">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo text-xs font-bold text-white">{index + 1}</span>
+        <span className="min-w-0 flex-1">
+          <span className="deva block text-sm font-bold text-ink" lang={speakLang}>{filledTitle || doc.kind}</span>
+          {doc.purpose && <span className="deva block text-xs text-ink-2" lang={speakLang}>{doc.purpose}</span>}
+          {doc.office && <span className="mt-0.5 block text-xs text-ink-3">🏢 {doc.office}</span>}
+        </span>
+        <span className="shrink-0 text-xs font-semibold text-indigo">
+          {remaining > 0 ? `${remaining} to fill` : "ready"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t border-border p-3">
+          {placeholders.length > 0 && (
+            <div className="mb-3 rounded-lg border border-saffron/30 bg-saffron-50 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-saffron-600">
+                <Mic className="h-3.5 w-3.5" /> Fill your details — type, or tap the mic and speak
+              </div>
+              <div className="mt-2 space-y-2">
+                {placeholders.map((p) => (
+                  <FillField
+                    key={p}
+                    label={p.replace(/[[\]]/g, "")}
+                    value={values[p] ?? ""}
+                    lang={speakLang}
+                    onChange={(v) => setValues((s) => ({ ...s, [p]: v }))}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          <pre className="deva max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed text-ink" lang={speakLang}>{filledBody}</pre>
+          <div className="mt-2 flex items-center gap-2">
+            <ListenButton text={`${filledTitle}. ${filledBody}`} lang={speakLang} />
+            <button onClick={download} className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600">
+              <Download className="h-3 w-3" />Download
+            </button>
           </div>
         </div>
       )}
-      <p className="mb-2 deva font-bold text-ink break-words" lang={speakLang}>{filledTitle}</p>
-      <pre className="deva max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface-2 p-4 text-sm leading-relaxed text-ink" lang={speakLang}>{filledBody}</pre>
-      <p className="mt-2 text-xs text-ink-3">⚠ A Bar Council-verified advocate reviews any filing before it goes to court. Verify with the named office before acting.</p>
-    </Card>
+    </div>
   );
 }
 
