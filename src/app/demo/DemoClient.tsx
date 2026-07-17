@@ -210,8 +210,8 @@ export function DemoClient() {
         )}
         {state.results.document?.isLegalDocument && <DocumentPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <PlanPanel results={state.results} speakLang={speakLang} />}
-        {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
+        {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
         {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
         {state.results.signals && <ConfidencePanel results={state.results} />}
