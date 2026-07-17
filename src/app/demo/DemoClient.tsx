@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic, Send, MessageCircle } from "lucide-react";
+import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic, Send, MessageCircle, X } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
 import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type LanguageCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -142,6 +142,9 @@ export function DemoClient() {
             accept="image/png,image/jpeg,image/webp,application/pdf,.pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+          <p className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-3">
+            <FileText className="h-3 w-3" /> Supported: Photo (JPG/PNG) · PDF · Word (.docx)
+          </p>
 
           <div className="mt-4">
             <span className="text-xs font-semibold text-ink-3">Or try an example</span>
@@ -212,10 +215,10 @@ export function DemoClient() {
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
-        {state.done && state.results.document?.isLegalDocument && (
-          <ChatPanel results={state.results} speakLang={speakLang} />
-        )}
       </div>
+      {state.done && state.results.document?.isLegalDocument && (
+        <FloatingChat results={state.results} speakLang={speakLang} />
+      )}
     </div>
   );
 }
@@ -545,8 +548,10 @@ function FillField({ label, value, lang, onChange }: { label: string; value: str
   );
 }
 
-/** Follow-up Q&A about the case — typed or voice, grounded in the document + law. */
-function ChatPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
+/** Floating help chat: a bottom-right button that opens grounded follow-up Q&A
+ *  (typed or voice) about the user's case, in their language. */
+function FloatingChat({ results, speakLang }: { results: CaseResults; speakLang: string }) {
+  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -583,50 +588,71 @@ function ChatPanel({ results, speakLang }: { results: CaseResults; speakLang: st
   };
 
   return (
-    <Card title="Ask a question" badge={<MessageCircle className="h-4 w-4 text-indigo" />}>
-      {messages.length === 0 && (
-        <p className="text-sm text-ink-3">
-          Have a question about your case? Type or tap the mic and ask in your own language — e.g. &ldquo;Do I have to pay?&rdquo;, &ldquo;Which documents do I need?&rdquo;
-        </p>
-      )}
-      {messages.length > 0 && (
-        <div className="space-y-2">
-          {messages.map((m, i) =>
-            m.role === "user" ? (
-              <div key={i} className="deva ml-8 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-ink">{m.text}</div>
-            ) : (
-              <div key={i} className="mr-8 rounded-lg bg-surface-2 px-3 py-2">
-                <p className="deva text-sm text-ink" lang={speakLang}>{m.text}</p>
-                <div className="mt-1"><ListenButton text={m.text} lang={speakLang} /></div>
-              </div>
-            ),
-          )}
-          {loading && (
-            <div className="mr-8 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-3">
-              <Loader2 className="h-4 w-4 animate-spin" /> …
+    <>
+      {open && (
+        <div className="fixed bottom-24 right-4 z-50 flex max-h-[70vh] w-[360px] max-w-[calc(100vw-2rem)] flex-col rounded-card border border-border bg-surface shadow-lg">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-indigo" />
+              <span className="text-sm font-bold text-ink">Ask about your case</span>
             </div>
-          )}
+            <button onClick={() => setOpen(false)} aria-label="Close chat" className="rounded p-1 text-ink-3 hover:bg-surface-2">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+            {messages.length === 0 && (
+              <p className="text-sm text-ink-3">
+                Ask in your own language — type or tap the mic. E.g. &ldquo;Do I have to pay?&rdquo;, &ldquo;Which documents do I need?&rdquo;
+              </p>
+            )}
+            {messages.map((m, i) =>
+              m.role === "user" ? (
+                <div key={i} className="deva ml-8 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-ink">{m.text}</div>
+              ) : (
+                <div key={i} className="mr-8 rounded-lg bg-surface-2 px-3 py-2">
+                  <p className="deva text-sm text-ink" lang={speakLang}>{m.text}</p>
+                  <div className="mt-1"><ListenButton text={m.text} lang={speakLang} /></div>
+                </div>
+              ),
+            )}
+            {loading && (
+              <div className="mr-8 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-3">
+                <Loader2 className="h-4 w-4 animate-spin" /> …
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 border-t border-border p-3">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder="Type your question…"
+              className="deva min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+            />
+            <VoiceMic lang={speakLang} onResult={(t) => send(t)} />
+            <button
+              onClick={() => send()}
+              disabled={loading || !input.trim()}
+              aria-label="Send"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo text-white hover:bg-indigo-600 disabled:opacity-40"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Type your question…"
-          className="deva min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-        />
-        <VoiceMic lang={speakLang} onResult={(t) => send(t)} />
-        <button
-          onClick={() => send()}
-          disabled={loading || !input.trim()}
-          aria-label="Send"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo text-white hover:bg-indigo-600 disabled:opacity-40"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </div>
-    </Card>
+
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label={open ? "Close chat" : "Ask a question"}
+        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo text-white shadow-lg transition hover:bg-indigo-600"
+      >
+        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+      </button>
+    </>
   );
 }
 
