@@ -463,51 +463,68 @@ function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: s
   );
 }
 
-// Minimal typing for the Web Speech recognition API (not in the standard DOM lib).
-type SpeechRec = {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
-  onerror: () => void;
-  onend: () => void;
-  start: () => void;
-};
-
-/** A microphone button: speech-to-text in the user's language (Web Speech ASR). */
+/** A microphone button: tap to record, tap to stop → server-side transcription
+ *  (Groq Whisper). Uses MediaRecorder so it works on Brave, Safari and Firefox,
+ *  where the browser's built-in Web Speech API is blocked or absent. */
 function VoiceMic({ lang, onResult }: { lang: string; onResult: (t: string) => void }) {
-  const [listening, setListening] = useState(false);
-  const win = typeof window !== "undefined"
-    ? (window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec })
-    : undefined;
-  const SR = win?.SpeechRecognition ?? win?.webkitSpeechRecognition;
-  if (!SR) return null;
+  const [status, setStatus] = useState<"idle" | "recording" | "transcribing">("idle");
+  const recRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
-  const listen = () => {
-    const rec = new SR();
-    rec.lang = BCP47[lang] ?? "en-IN";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.onresult = (e) => {
-      onResult(e.results[0][0].transcript);
-      setListening(false);
-    };
-    rec.onerror = () => setListening(false);
-    rec.onend = () => setListening(false);
-    rec.start();
-    setListening(true);
+  const start = async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setStatus("transcribing");
+        try {
+          const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+          const fd = new FormData();
+          fd.append("file", blob, "audio.webm");
+          if (lang && lang !== "auto") fd.append("language", lang);
+          const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+          const data = await res.json();
+          if (data.text) onResult(data.text);
+        } catch {
+          /* ignore — user can type */
+        }
+        setStatus("idle");
+      };
+      rec.start();
+      recRef.current = rec;
+      setStatus("recording");
+    } catch {
+      setStatus("idle"); // mic permission denied
+    }
+  };
+
+  const toggle = () => {
+    if (status === "recording") {
+      recRef.current?.stop();
+      recRef.current = null;
+    } else if (status === "idle") {
+      void start();
+    }
   };
 
   return (
     <button
-      onClick={listen}
-      aria-label="Speak"
+      onClick={toggle}
+      disabled={status === "transcribing"}
+      aria-label={status === "recording" ? "Stop recording" : "Speak"}
+      title={status === "recording" ? "Tap to stop" : "Tap and speak"}
       className={cn(
         "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-        listening ? "border-saffron bg-saffron text-white animate-pulse-dot" : "border-border bg-surface text-indigo hover:bg-indigo-50",
+        status === "recording"
+          ? "border-red bg-red text-white animate-pulse-dot"
+          : "border-border bg-surface text-indigo hover:bg-indigo-50",
       )}
     >
-      <Mic className="h-4 w-4" />
+      {status === "transcribing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
     </button>
   );
 }
