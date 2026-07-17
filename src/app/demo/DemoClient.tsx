@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic, Send, MessageCircle, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic, Send, MessageCircle, X, MapPin, ExternalLink, Printer, CheckCircle2, ClipboardList } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
 import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type DraftDocument, type LanguageCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,12 @@ const HELPLINES = [
   { label: "Police emergency", num: "112" },
   { label: "Child helpline", num: "1098" },
 ];
+
+/** A Google Maps search link for an office + address. */
+function mapLink(office?: string, address?: string): string {
+  const q = encodeURIComponent([office, address].filter(Boolean).join(", ") + ", India");
+  return `https://www.google.com/maps/search/?api=1&query=${q}`;
+}
 
 // One-click sample documents so judges can test instantly.
 const EXAMPLES = [
@@ -210,6 +216,7 @@ export function DemoClient() {
         )}
         {state.results.document?.isLegalDocument && <DocumentPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <PlanPanel results={state.results} speakLang={speakLang} />}
+        {state.results.draft?.documentsToCollect?.length ? <DocsToCollectCard results={state.results} /> : null}
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
         {state.results.tracking && <TrackingPanel results={state.results} />}
@@ -389,6 +396,16 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
                   <Info k="Fee" v={s.fee} />
                   {s.deadlineDays != null && <Info k="Deadline" v={`${s.deadlineDays} days`} />}
                 </dl>
+                {s.office ? (
+                  <a
+                    href={mapLink(s.office, s.officeAddress)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-2 py-1 text-xs font-semibold text-indigo hover:border-saffron"
+                  >
+                    <MapPin className="h-3 w-3" /> Open in Maps ↗
+                  </a>
+                ) : null}
                 {s.citations?.length ? (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {s.citations.map((c, i) => (
@@ -415,99 +432,138 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
   );
 }
 
-/** The packet of forms the user must actually file, in order. */
+/** Supporting documents to collect before filing, and where to get them. */
+function DocsToCollectCard({ results }: { results: CaseResults }) {
+  const list = results.draft?.documentsToCollect ?? [];
+  if (!list.length) return null;
+  return (
+    <Card title="Documents to collect first" badge={<ClipboardList className="h-4 w-4 text-indigo" />}>
+      <p className="mb-3 text-xs text-ink-2">Gather these before you file. If you don&apos;t have one, here&apos;s where to get it made.</p>
+      <ul className="space-y-2">
+        {list.map((c, i) => (
+          <li key={i} className="flex items-start gap-2 rounded-lg border border-border bg-surface-2 p-2.5">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-[11px] font-bold text-ink-3">{i + 1}</span>
+            <div className="min-w-0">
+              <p className="deva text-sm font-semibold text-ink">{c.name}</p>
+              {c.whereToGet && <p className="deva text-xs text-ink-2">📍 {c.whereToGet}</p>}
+              {c.contact && <p className="deva text-xs text-ink-3">📞 {c.contact}</p>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/** The packet of real forms the user must fill and file, in order. */
 function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const d = results.draft!;
   if (!d.documents?.length) return null;
   return (
-    <Card title={`Forms to file (${d.documents.length})`} badge={<Chip tone="green">Fill by voice</Chip>}>
+    <Card title={`Forms to fill (${d.documents.length})`} badge={<Chip tone="green">Fill by voice</Chip>}>
       <p className="mb-3 text-xs text-ink-2">
-        These are the papers you need to submit, in order. Fill your details once — by typing or
-        <strong> tapping the mic and speaking</strong> — then download and print each.
+        The real forms for your case. Open each, fill your details by <strong>typing or speaking</strong>,
+        then file it online or print &amp; submit at the office.
       </p>
       <div className="space-y-3">
         {d.documents.map((doc, i) => (
           <FormCard key={i} doc={doc} index={i} speakLang={speakLang} />
         ))}
       </div>
-      <p className="mt-3 text-xs text-ink-3">⚠ A Bar Council-verified advocate reviews any filing before it goes to court. Verify with the named office before acting.</p>
+      <p className="mt-3 text-xs text-ink-3">⚠ Filling is real; submission here is a safe simulation — nothing is sent to a government portal. A Bar Council-verified advocate reviews anything filed in court.</p>
     </Card>
   );
 }
 
-/** One fillable form in the packet: voice/typed fields, live preview, download. */
+/** One fillable form: structured fields (voice/typed), live preview, the real
+ *  portal link, and a SAFE simulated submission (nothing is sent to a gov site). */
 function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number; speakLang: string }) {
   const [open, setOpen] = useState(index === 0);
   const [values, setValues] = useState<Record<string, string>>({});
-
-  const placeholders = useMemo(() => {
-    const found = `${doc.title}\n${doc.body}`.match(/\[[^\]\n]{1,48}\]/g) ?? [];
-    return Array.from(new Set(found));
-  }, [doc.title, doc.body]);
+  const [ref, setRef] = useState<string | null>(null);
+  const fields = doc.fields ?? [];
 
   const fill = (text: string) => {
     let out = text;
-    for (const p of placeholders) {
-      const v = values[p]?.trim();
-      if (v) out = out.split(p).join(v);
+    for (const f of fields) {
+      const v = values[f.label]?.trim();
+      if (v) out = out.split(`[${f.label}]`).join(v);
     }
     return out;
   };
   const filledTitle = fill(doc.title);
   const filledBody = fill(doc.body);
-  const remaining = placeholders.filter((p) => !values[p]?.trim()).length;
+  const remaining = fields.filter((f) => !values[f.label]?.trim()).length;
+  const online = doc.submissionMode === "online" && !!doc.portalUrl;
 
   const download = () => {
     const blob = new Blob([`${filledTitle}\n\n${filledBody}`], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `${doc.kind}.txt`;
-    a.click();
+    a.href = url; a.download = `${doc.kind}.txt`; a.click();
     URL.revokeObjectURL(url);
   };
+  const submit = () =>
+    setRef(`NS-${(doc.kind.replace(/[^a-z]/gi, "").slice(0, 3).toUpperCase() || "DOC")}-${Date.now().toString(36).slice(-6).toUpperCase()}`);
 
   return (
     <div className="rounded-lg border border-border bg-surface-2">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-start gap-2 p-3 text-left">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo text-xs font-bold text-white">{index + 1}</span>
         <span className="min-w-0 flex-1">
-          <span className="deva block text-sm font-bold text-ink" lang={speakLang}>{filledTitle || doc.kind}</span>
+          <span className="deva block text-sm font-bold text-ink" lang={speakLang}>{doc.title || doc.kind}</span>
           {doc.purpose && <span className="deva block text-xs text-ink-2" lang={speakLang}>{doc.purpose}</span>}
           {doc.office && <span className="mt-0.5 block text-xs text-ink-3">🏢 {doc.office}</span>}
         </span>
-        <span className="shrink-0 text-xs font-semibold text-indigo">
-          {remaining > 0 ? `${remaining} to fill` : "ready"}
+        <span className="shrink-0 text-right text-xs font-semibold">
+          <span className={cn("block rounded px-1.5 py-0.5", online ? "bg-green-50 text-green" : "bg-amber-50 text-amber")}>{online ? "Online" : "Print"}</span>
+          <span className="mt-1 block text-indigo">{ref ? "filed ✓" : remaining > 0 ? `${remaining} to fill` : "ready"}</span>
         </span>
       </button>
 
       {open && (
         <div className="border-t border-border p-3">
-          {placeholders.length > 0 && (
+          {fields.length > 0 && !ref && (
             <div className="mb-3 rounded-lg border border-saffron/30 bg-saffron-50 p-3">
               <div className="flex items-center gap-1.5 text-xs font-bold text-saffron-600">
-                <Mic className="h-3.5 w-3.5" /> Fill your details — type, or tap the mic and speak
+                <Mic className="h-3.5 w-3.5" /> Fill the form — type, or tap the mic and speak
               </div>
-              <div className="mt-2 space-y-2">
-                {placeholders.map((p) => (
-                  <FillField
-                    key={p}
-                    label={p.replace(/[[\]]/g, "")}
-                    value={values[p] ?? ""}
-                    lang={speakLang}
-                    onChange={(v) => setValues((s) => ({ ...s, [p]: v }))}
-                  />
+              <div className="mt-2 space-y-2.5">
+                {fields.map((f) => (
+                  <FillField key={f.label} label={f.label} hint={f.hint} value={values[f.label] ?? ""} lang={speakLang} onChange={(v) => setValues((s) => ({ ...s, [f.label]: v }))} />
                 ))}
               </div>
             </div>
           )}
-          <pre className="deva max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed text-ink" lang={speakLang}>{filledBody}</pre>
-          <div className="mt-2 flex items-center gap-2">
-            <ListenButton text={`${filledTitle}. ${filledBody}`} lang={speakLang} />
-            <button onClick={download} className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600">
-              <Download className="h-3 w-3" />Download
-            </button>
-          </div>
+
+          <details className="mb-3">
+            <summary className="cursor-pointer text-xs font-semibold text-ink-3">Preview the filled form</summary>
+            <pre className="deva mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed text-ink" lang={speakLang}>{filledBody}</pre>
+          </details>
+
+          {ref ? (
+            <div className="rounded-lg border border-green/30 bg-green-50 p-3">
+              <div className="flex items-center gap-1.5 text-sm font-bold text-green"><CheckCircle2 className="h-4 w-4" /> Submitted (simulation)</div>
+              <p className="mt-1 text-xs text-ink-2">Reference: <span className="font-bold text-ink">{ref}</span> · Status: <strong>Received, under review</strong></p>
+              <p className="mt-2 text-xs text-ink-3">This is a safe demo — nothing was sent to a government website. To file for real:</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {online ? (
+                  <a href={doc.portalUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600"><ExternalLink className="h-3 w-3" /> File on {doc.portalName || "the portal"}</a>
+                ) : (
+                  <button onClick={download} className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600"><Printer className="h-3 w-3" /> Print &amp; submit at {doc.office || "the office"}</button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={submit} disabled={remaining > 0} className="flex items-center gap-1 rounded-lg bg-saffron px-3 py-1.5 text-xs font-bold text-white hover:bg-saffron-600 disabled:opacity-40">
+                <Send className="h-3 w-3" /> Submit form{remaining > 0 ? ` (${remaining} left)` : ""}
+              </button>
+              {online && <a href={doc.portalUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-indigo hover:border-saffron"><ExternalLink className="h-3 w-3" /> {doc.portalName || "Portal"}</a>}
+              <button onClick={download} className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2"><Download className="h-3 w-3" /> Download</button>
+              <ListenButton text={`${filledTitle}. ${filledBody}`} lang={speakLang} />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -580,18 +636,20 @@ function VoiceMic({ lang, onResult }: { lang: string; onResult: (t: string) => v
   );
 }
 
-/** One fillable field: text input + voice (ASR) mic in the user's language. */
-function FillField({ label, value, lang, onChange }: { label: string; value: string; lang: string; onChange: (v: string) => void }) {
+/** One fillable form field: label + text input + voice (ASR) mic. */
+function FillField({ label, value, lang, hint, onChange }: { label: string; value: string; lang: string; hint?: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="deva w-24 shrink-0 truncate text-xs font-semibold text-ink-2" title={label}>{label}</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="type or speak"
-        className="deva min-w-0 flex-1 rounded border border-border bg-surface px-2 py-1.5 text-sm text-ink"
-      />
-      <VoiceMic lang={lang} onResult={onChange} />
+    <div>
+      <label className="deva mb-0.5 block text-xs font-semibold text-ink-2">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={hint || "type or speak"}
+          className="deva min-w-0 flex-1 rounded border border-border bg-surface px-2 py-1.5 text-sm text-ink"
+        />
+        <VoiceMic lang={lang} onResult={onChange} />
+      </div>
     </div>
   );
 }

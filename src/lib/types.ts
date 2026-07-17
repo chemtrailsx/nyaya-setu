@@ -146,18 +146,38 @@ export type DraftKind =
   | "civil_suit"
   | "other";
 
-/** One ready-to-file document in the user's packet. */
+/** One field of a real form the user fills in. */
+export interface FormField {
+  label: string; // human-readable, in the user's language
+  hint?: string; // example / format, e.g. "e.g. Plot 214"
+}
+
+/** One ready-to-file document/form in the user's packet. */
 export interface DraftDocument {
   kind: DraftKind;
-  title: string; // document title, in the user's language
+  title: string; // document/form title, in the user's language
   purpose: string; // why/when she needs this, in her language
   office: string; // where to submit it
-  body: string; // the full fillable draft, in the user's language
+  officeAddress: string; // plain-language location (used for a map link)
+  submissionMode: "online" | "print"; // fill online on a portal, or print & submit
+  portalName?: string; // e.g. "JharBhoomi", "NALSA LSMS", "RTI Online"
+  portalUrl?: string; // the real official portal to submit on
+  fields: FormField[]; // the real form's fields, in filing order
+  body: string; // the full fillable draft, with [Label] placeholders matching fields
+}
+
+/** A supporting document she must obtain first, and where to get it. */
+export interface CollectDoc {
+  name: string; // e.g. "Husband's death certificate"
+  whereToGet: string; // where/how to obtain it
+  contact?: string; // office / helpline / portal
 }
 
 export interface DraftAgentResult {
   /** The packet of forms she must actually file — ordered by what to do first. */
   documents: DraftDocument[];
+  /** Supporting documents she must collect before filing, and where to get them. */
+  documentsToCollect: CollectDoc[];
   language: LanguageCode;
   draftConfidence: number;
 }
