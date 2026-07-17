@@ -216,9 +216,11 @@ export function DemoClient() {
         {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
       </div>
-      {state.done && state.results.document?.isLegalDocument && (
-        <FloatingChat results={state.results} speakLang={speakLang} />
-      )}
+      <FloatingChat
+        results={state.results}
+        speakLang={speakLang}
+        caseReady={state.done && !!state.results.document?.isLegalDocument}
+      />
     </div>
   );
 }
@@ -550,7 +552,7 @@ function FillField({ label, value, lang, onChange }: { label: string; value: str
 
 /** Floating help chat: a bottom-right button that opens grounded follow-up Q&A
  *  (typed or voice) about the user's case, in their language. */
-function FloatingChat({ results, speakLang }: { results: CaseResults; speakLang: string }) {
+function FloatingChat({ results, speakLang, caseReady }: { results: CaseResults; speakLang: string; caseReady: boolean }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
   const [input, setInput] = useState("");
@@ -558,7 +560,7 @@ function FloatingChat({ results, speakLang }: { results: CaseResults; speakLang:
 
   const send = async (q?: string) => {
     const question = (q ?? input).trim();
-    if (!question || loading) return;
+    if (!question || loading || !caseReady) return;
     setInput("");
     const next = [...messages, { role: "user" as const, text: question }];
     setMessages(next);
@@ -602,7 +604,14 @@ function FloatingChat({ results, speakLang }: { results: CaseResults; speakLang:
           </div>
 
           <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
-            {messages.length === 0 && (
+            {!caseReady && (
+              <div className="rounded-lg border border-amber/30 bg-amber-50 p-3 text-sm text-ink-2">
+                <p className="font-semibold text-amber">Upload your document first 📄</p>
+                <p className="mt-1">I answer questions about <em>your</em> legal document. Upload a photo, PDF or Word file above and run it — then ask me anything about it, in your language.</p>
+                <p className="deva mt-1 text-ink-3">पहले अपना दस्तावेज़ ऊपर अपलोड करें — फिर मुझसे उसके बारे में पूछें।</p>
+              </div>
+            )}
+            {caseReady && messages.length === 0 && (
               <p className="text-sm text-ink-3">
                 Ask in your own language — type or tap the mic. E.g. &ldquo;Do I have to pay?&rdquo;, &ldquo;Which documents do I need?&rdquo;
               </p>
@@ -629,13 +638,14 @@ function FloatingChat({ results, speakLang }: { results: CaseResults; speakLang:
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="Type your question…"
-              className="deva min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+              disabled={!caseReady}
+              placeholder={caseReady ? "Type your question…" : "Upload a document first…"}
+              className="deva min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"
             />
-            <VoiceMic lang={speakLang} onResult={(t) => send(t)} />
+            {caseReady && <VoiceMic lang={speakLang} onResult={(t) => send(t)} />}
             <button
               onClick={() => send()}
-              disabled={loading || !input.trim()}
+              disabled={loading || !input.trim() || !caseReady}
               aria-label="Send"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo text-white hover:bg-indigo-600 disabled:opacity-40"
             >
