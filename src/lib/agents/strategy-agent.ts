@@ -8,6 +8,7 @@
 import { llm } from "@/lib/llm";
 import { retrieve } from "@/lib/rag/retrieve";
 import { loadCorpus } from "@/lib/rag/corpus";
+import { jurisdictionPromptBlock, resolveJurisdiction, type Jurisdiction } from "@/lib/jurisdiction";
 import { SUPPORTED_LANGUAGES } from "@/lib/types";
 import type {
   CaseCategory,
@@ -27,8 +28,9 @@ const CODE_NAME: Record<LegalCode, string> = {
   RFCTLARR: "Land Acquisition Act 2013",
 };
 
-/** Which statute books actually govern each case type — used to bias retrieval. */
-const CATEGORY_CODES: Record<CaseCategory, LegalCode[]> = {
+/** Which statute books actually govern each case type — used to bias retrieval.
+ *  Exported so the evaluation harness measures the exact production retrieval. */
+export const CATEGORY_CODES: Record<CaseCategory, LegalCode[]> = {
   land_inheritance: ["PERSONAL_LAW", "NALSA", "RFCTLARR"],
   fir_denial: ["BNSS", "BNS", "NALSA"],
   domestic_violence: ["BNS", "BNSS", "NALSA"],
@@ -38,14 +40,15 @@ const CATEGORY_CODES: Record<CaseCategory, LegalCode[]> = {
 };
 
 /** Legal vocabulary injected into the retrieval query so the right substantive
- *  law surfaces even when the document itself is written procedurally. */
-const CATEGORY_TERMS: Record<CaseCategory, string> = {
+ *  law surfaces even when the document itself is written procedurally. Exported
+ *  for the evaluation harness so it queries exactly as production does. */
+export const CATEGORY_TERMS: Record<CaseCategory, string> = {
   land_inheritance:
-    "succession inheritance intestate heirs devolution of property female Hindu widow daughter coparcenary absolute property free legal aid eligibility woman",
+    "succession inheritance intestate heirs devolution of property female Hindu widow daughter coparcenary absolute property free legal aid eligibility woman male Hindu dying intestate Class I heir son mother absolute owner full ownership possessed by a female",
   fir_denial:
     "information in cognizable cases FIR registration officer in charge police station Magistrate order investigation refusal free legal aid",
   domestic_violence:
-    "cruelty by husband or relative dowry protection of woman assault free legal aid woman",
+    "cruelty by husband or relative dowry protection of woman assault free legal aid woman cruelty defined wilful conduct mental and physical harm harassment for dowry demand",
   rti: "right to information public authority application free legal aid",
   consumer: "consumer dispute deficiency in service compensation free legal aid",
   other: "free legal aid eligibility",
@@ -69,10 +72,11 @@ function buildQuery(doc: DocumentAgentResult): string {
 export async function runStrategyAgent(
   doc: DocumentAgentResult,
   outputLang: LanguageCode,
+  jurisdiction: Jurisdiction = resolveJurisdiction(),
 ): Promise<StrategyAgentResult> {
   const langName = SUPPORTED_LANGUAGES[outputLang].name;
   const chunks = await retrieve(buildQuery(doc), {
-    topK: 6,
+    topK: 8,
     preferCodes: CATEGORY_CODES[doc.category] ?? CATEGORY_CODES.other,
   });
   const retrievalScore = chunks.length ? chunks[0].score : 0;
@@ -107,6 +111,8 @@ export async function runStrategyAgent(
   const prompt = `RETRIEVED STATUTE (your only permitted source of law):
 ${context}
 
+${jurisdictionPromptBlock(jurisdiction)}
+
 DOCUMENT ANALYSIS:
 - Category: ${doc.category}
 - Summary: ${doc.summary}
@@ -134,10 +140,13 @@ Produce a grounded action plan as this exact JSON:
   "rationale": "<2-3 sentences in ${langName}, plain words, on why this is the right path>"
 }
 Rules:
+- Use the GOVERNING JURISDICTION facts above for any land/revenue step: name the correct office (${jurisdiction.revenueOffice}), officer (${jurisdiction.revenueOfficer}), the local mutation term (${jurisdiction.mutationTerm}) and record (${jurisdiction.recordName}). Never name another state's portal or process.
 - Every citation MUST use the exact {"code","section"} shown for a passage above; never cite anything not retrieved.
 - The FIRST step should establish the user's substantive legal RIGHT or the authority's DUTY, grounded in a specific cited section (e.g. the succession right, or the duty to register an FIR).
+- Succession law depends on WHOSE estate it is: if the deceased is MALE, the governing rule is general succession for males (and a widow/daughter takes as a Class-I heir); do NOT cite provisions that govern the succession of a FEMALE's own property, and vice-versa. Cite only the provision that actually applies to this deceased.
 - Include a step for free NALSA legal aid and cite the eligibility provision (Legal Services Authorities Act §12) when the user qualifies.
 - Every step that rests on a legal right, duty, or eligibility MUST carry at least one citation.
+- deadlineDays: set it ONLY for a step with a real statutory time limit (e.g. an appeal period, an objection window, a limitation period) using the correct number of days; otherwise null. Never invent a deadline — a wrong one is worse than none.
 - Be specific to THIS person's facts (names, plot/case numbers, dates from the document) — not generic boilerplate.
 - 2 to 5 steps, in the order the user should act.`;
 

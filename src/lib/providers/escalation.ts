@@ -1,41 +1,50 @@
 /**
- * Escalation provider — routes a case to a Bar Council-verified DLSA advocate
- * with a calendar booking (Calendly in production).
+ * Escalation provider — the human review gate (layer 4 of "defence in depth").
  *
- * SIMULATED: uses a small panel of illustrative advocates. The real system
- * queries the empanelled DLSA / Bar Council roster and a scheduling API.
+ * Whenever confidence is low or the matter is sensitive, we do NOT guess at a
+ * private lawyer. We route to the statutory free-legal-aid ladder that already
+ * exists in every district of India under the Legal Services Authorities Act,
+ * 1987: NALSA → State LSA → District LSA. It is free for eligible users, it is
+ * uniform nationwide, and the user formally registers by filing the NALSA legal-
+ * aid application (nalsa_form_1) on the LSMS portal or at the DLSA front office.
+ *
+ * SIMULATED: we generate a booking reference locally. The live system would POST
+ * the request to the DLSA / NALSA LSMS API and return the real acknowledgement.
  */
+import { NALSA, resolveJurisdiction, type Jurisdiction } from "@/lib/jurisdiction";
 import type { CaseCategory, EscalationResult } from "@/lib/types";
-
-interface Advocate {
-  name: string;
-  barId: string;
-  dlsaDistrict: string;
-  specialities: CaseCategory[];
-}
-
-// Illustrative panel (simulated). A live roster would come from the DLSA DB.
-const PANEL: Advocate[] = [
-  { name: "Adv. Sunita Devi", barId: "JH/1123/2016", dlsaDistrict: "Ranchi DLSA", specialities: ["fir_denial", "domestic_violence"] },
-  { name: "Adv. Rakesh Mahto", barId: "JH/0847/2012", dlsaDistrict: "Khunti DLSA", specialities: ["land_inheritance"] },
-  { name: "Adv. Farhana Khatun", barId: "JH/1590/2019", dlsaDistrict: "Ranchi DLSA", specialities: ["domestic_violence", "fir_denial"] },
-  { name: "Adv. Praveen Kumar", barId: "JH/0655/2010", dlsaDistrict: "Gumla DLSA", specialities: ["land_inheritance", "consumer", "rti"] },
-];
 
 export interface EscalationProvider {
   readonly simulated: boolean;
-  assign(input: { category: CaseCategory; reason: string }): Promise<EscalationResult>;
+  assign(input: { category: CaseCategory; reason: string; jurisdiction?: Jurisdiction }): Promise<EscalationResult>;
 }
 
 export const SimulatedEscalation: EscalationProvider = {
   simulated: true,
-  async assign({ category, reason }) {
-    const match = PANEL.find((a) => a.specialities.includes(category)) ?? PANEL[0];
-    const ref = `NS-ESC-${Date.now().toString(36).toUpperCase()}`;
+  async assign({ reason, jurisdiction }) {
+    const j = jurisdiction ?? resolveJurisdiction();
+    const scope =
+      j.code === "IN"
+        ? "your District Legal Services Authority (in your district court complex)"
+        : `the District Legal Services Authority in your district of ${j.name}`;
+    const ref = `NS-NALSA-${Date.now().toString(36).toUpperCase()}`;
     return {
       reason,
-      advocate: { name: match.name, barId: match.barId, dlsaDistrict: match.dlsaDistrict },
-      slaHours: 2,
+      authority: {
+        name: "District Legal Services Authority (DLSA)",
+        scope,
+        helpline: NALSA.helpline,
+        portalName: NALSA.portalName,
+        portalUrl: NALSA.portalUrl,
+        howToReach: `Call the free legal-aid helpline ${NALSA.helpline}, or visit ${scope}. A panel lawyer is assigned to you free of charge.`,
+      },
+      registrationForm: {
+        kind: "nalsa_form_1",
+        title: "Free Legal Aid Application (NALSA)",
+        submissionMode: "online",
+        portalUrl: NALSA.portalUrl,
+      },
+      slaHours: 48, // DLSA typically allots a panel lawyer within ~2 working days
       bookingRef: ref,
       simulated: true,
     };

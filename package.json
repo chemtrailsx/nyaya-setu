@@ -10,6 +10,8 @@
     "clean": "rimraf .next",
     "ingest": "tsx scripts/ingest-corpus.ts",
     "corpus": "python scripts/parse_acts.py && python scripts/parse_civil_acts.py",
+    "eval": "tsx scripts/eval.ts",
+    "eval:full": "tsx scripts/eval.ts --full",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {

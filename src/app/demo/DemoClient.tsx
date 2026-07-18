@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic, Send, MessageCircle, X, MapPin, ExternalLink, Printer, CheckCircle2, ClipboardList } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
 import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type DraftDocument, type LanguageCode } from "@/lib/types";
+import { STATE_OPTIONS } from "@/lib/jurisdiction";
 import { cn } from "@/lib/utils";
 
 // Output-language options (the user picks per run; "auto" follows the document).
@@ -58,6 +59,9 @@ export function DemoClient() {
   const { state, run, reset } = useCaseStream();
   const [image, setImage] = useState<{ dataUrl: string; mediaType: string; name: string } | null>(null);
   const [lang, setLang] = useState("auto");
+  // The user's state drives state-correct offices/portals (land is a State
+  // subject). "auto" → detect from the document, else national fallback.
+  const [stateCode, setStateCode] = useState("auto");
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -71,7 +75,7 @@ export function DemoClient() {
   const start = () => {
     if (!image) return;
     stopSpeaking();
-    run(image.dataUrl, image.mediaType, lang);
+    run(image.dataUrl, image.mediaType, lang, stateCode === "auto" ? undefined : stateCode);
   };
 
   // Load a bundled example image and run it in one click.
@@ -85,11 +89,19 @@ export function DemoClient() {
     });
     const img = { dataUrl, mediaType: blob.type || "image/png", name };
     setImage(img);
-    run(img.dataUrl, img.mediaType, lang);
+    run(img.dataUrl, img.mediaType, lang, stateCode === "auto" ? undefined : stateCode);
   };
   // The BCP-47 tag to read results aloud with: the chosen language, or the
   // document's detected language when on auto.
   const speakLang = lang !== "auto" ? lang : state.results.document?.language ?? "en";
+
+  // Offline-safe sample run — replays a pre-recorded case, so a live demo can
+  // never be killed by an API/quota error. No image or LLM call needed.
+  const playSample = () => {
+    stopSpeaking();
+    setImage(null);
+    run("", "", "auto", undefined, undefined, true);
+  };
 
   const startOver = () => {
     reset();
@@ -167,20 +179,44 @@ export function DemoClient() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={playSample}
+              disabled={state.running}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo/30 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo transition hover:border-indigo disabled:opacity-40"
+              title="Replays a pre-recorded case — works even with no internet or API quota"
+            >
+              ▶ Play sample case (works offline)
+            </button>
           </div>
 
-          <label className="mt-4 block">
-            <span className="text-xs font-semibold text-ink-3">Answer me in</span>
-            <select
-              value={lang}
-              onChange={(e) => setLang(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm font-semibold text-ink"
-            >
-              {LANG_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>{o.label}</option>
-              ))}
-            </select>
-          </label>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-3">Answer me in</span>
+              <select
+                value={lang}
+                onChange={(e) => setLang(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm font-semibold text-ink"
+              >
+                {LANG_OPTIONS.map((o) => (
+                  <option key={o.code} value={o.code}>{o.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-3">My state</span>
+              <select
+                value={stateCode}
+                onChange={(e) => setStateCode(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm font-semibold text-ink"
+              >
+                <option value="auto">Auto-detect</option>
+                {STATE_OPTIONS.map((s) => (
+                  <option key={s.code} value={s.code}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="mt-1 text-[11px] text-ink-3">Land &amp; revenue rules differ by state — this picks the right office &amp; portal.</p>
 
           <div className="mt-3 flex gap-2">
             <button
@@ -216,6 +252,7 @@ export function DemoClient() {
         )}
         {state.results.document?.isLegalDocument && <DocumentPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <PlanPanel results={state.results} speakLang={speakLang} />}
+        {state.results.strategy && <EligibilityCard eligible={state.results.strategy.nalsaEligible} />}
         {state.results.draft?.documentsToCollect?.length ? <DocsToCollectCard results={state.results} /> : null}
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
@@ -339,7 +376,7 @@ function ConfidencePanel({ results }: { results: CaseResults }) {
         <Meter label="Overall score (needs 0.72+)" value={ens} big tone={escalated ? "amber" : "green"} />
         <p className="mt-2 text-xs text-ink-3">
           {escalated
-            ? "Below the safety line — a Bar Council-verified lawyer is reviewing this case instead."
+            ? "Below the safety line — routed to free NALSA legal aid (helpline 15100); a DLSA panel lawyer reviews this case instead."
             : "Above the safety line, so the plan is shown. You're still told to confirm with the office named above."}
         </p>
       </div>
@@ -387,6 +424,11 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo text-xs font-bold text-white">{s.order}</span>
               <div className="min-w-0">
                 <p className="deva font-semibold text-ink">{s.action}</p>
+                {s.deadlineDays != null && (
+                  <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-amber/30 bg-amber-50 px-2 py-1 text-xs font-bold text-amber">
+                    ⏳ Act within {s.deadlineDays} days — missing this deadline can bar your case
+                  </p>
+                )}
                 <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-ink-2">
                   <Info k="Where to go" v={s.office} />
                   <Info k="Whom to meet" v={s.officer} />
@@ -394,7 +436,6 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
                   {s.contact ? <InfoWide k="Who to contact" v={s.contact} /> : null}
                   {s.forms?.length ? <Info k="What to file" v={s.forms.join(", ")} /> : null}
                   <Info k="Fee" v={s.fee} />
-                  {s.deadlineDays != null && <Info k="Deadline" v={`${s.deadlineDays} days`} />}
                 </dl>
                 {s.office ? (
                   <a
@@ -470,7 +511,7 @@ function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: s
           <FormCard key={i} doc={doc} index={i} speakLang={speakLang} />
         ))}
       </div>
-      <p className="mt-3 text-xs text-ink-3">⚠ Filling is real; submission here is a safe simulation — nothing is sent to a government portal. A Bar Council-verified advocate reviews anything filed in court.</p>
+      <p className="mt-3 text-xs text-ink-3">⚠ Filling is real; submission here is a safe simulation — nothing is sent to a government portal. For anything filed in court, free NALSA legal aid (helpline 15100) reviews it first.</p>
     </Card>
   );
 }
@@ -791,20 +832,78 @@ function TrackingPanel({ results }: { results: CaseResults }) {
 
 function EscalationPanel({ results }: { results: CaseResults }) {
   const e = results.escalation!;
+  const a = e.authority;
   return (
-    <Card title="Human review gate" badge={<Chip tone="amber">SLA {e.slaHours}h</Chip>}>
+    <Card title="Human review — free NALSA legal aid" badge={<Chip tone="amber">Within {e.slaHours}h</Chip>}>
       <p className="text-sm text-ink-2">{e.reason}</p>
       <div className="mt-3 rounded-lg border border-border bg-surface-2 p-3">
         <div className="flex items-center gap-2">
           <UserCheck className="h-4 w-4 text-indigo" />
-          <span className="font-bold text-ink">{e.advocate.name}</span>
+          <span className="font-bold text-ink">{a.name}</span>
         </div>
+        <p className="mt-1 text-xs text-ink-2">{a.howToReach}</p>
         <dl className="mt-2 grid grid-cols-2 gap-1 text-xs">
-          <Info k="Bar ID" v={e.advocate.barId} />
-          <Info k="DLSA" v={e.advocate.dlsaDistrict} />
-          <Info k="Booking" v={e.bookingRef} />
+          <Info k="Covers" v={a.scope} />
+          <Info k="Reference" v={e.bookingRef} />
         </dl>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a
+            href={`tel:${a.helpline}`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-saffron px-3 py-2 text-xs font-bold text-white transition hover:bg-saffron-600"
+          >
+            <Phone className="h-3.5 w-3.5" /> Call {a.helpline} (free)
+          </a>
+          <a
+            href={a.portalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-bold text-indigo transition hover:bg-surface"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Register on {a.portalName}
+          </a>
+        </div>
+        <p className="mt-2 text-[11px] text-ink-3">
+          Registering files the {e.registrationForm.title} — free legal aid under the Legal Services Authorities Act, 1987.
+        </p>
       </div>
+    </Card>
+  );
+}
+
+/** Free legal aid eligibility under §12 of the Legal Services Authorities Act,
+ *  1987 — the concrete grounds a person qualifies on. Self-check, no submission. */
+const LSA12_GROUNDS = [
+  "A woman or a child",
+  "A member of a Scheduled Caste or Scheduled Tribe (SC/ST)",
+  "A person with a disability",
+  "A victim of trafficking, or of violence (incl. domestic violence)",
+  "A victim of a mass disaster, caste atrocity, flood, drought or earthquake",
+  "An industrial workman",
+  "A person in custody / a protective home / a juvenile home",
+  "Annual income below your State's legal-aid ceiling",
+];
+function EligibilityCard({ eligible }: { eligible?: boolean }) {
+  return (
+    <Card
+      title="Are you eligible for FREE legal aid?"
+      badge={eligible ? <Chip tone="green">Likely eligible</Chip> : <Chip tone="indigo">Check below</Chip>}
+    >
+      <p className="text-sm text-ink-2">
+        Under §12 of the Legal Services Authorities Act, 1987, legal aid is <span className="font-bold text-ink">free</span> if
+        <span className="font-semibold"> any one</span> of these applies to you:
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {LSA12_GROUNDS.map((g) => (
+          <li key={g} className="flex items-start gap-2 text-sm text-ink-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green" />
+            <span className="deva">{g}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs text-ink-3">
+        The income ceiling is set by each State (higher for cases before the Supreme Court). To confirm and register, call the
+        free NALSA helpline <a href="tel:15100" className="font-bold text-indigo">15100</a>.
+      </p>
     </Card>
   );
 }

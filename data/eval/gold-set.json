@@ -1,0 +1,140 @@
+{
+  "$schema": "./gold-set.schema.md",
+  "version": "0.1.0",
+  "description": "Lawyer-adjudicated evaluation set for NyayaSetu. Each case is a real-world archetype whose 'expect' block is the GROUND TRUTH a qualified advocate signed off on. The eval harness (scripts/eval.ts) scores the pipeline against these. See README.md for the adjudication protocol. inputText lets the harness run without a document image (it tests classification, retrieval and strategy, not OCR).",
+  "cases": [
+    {
+      "id": "land-widow-jh-01",
+      "state": "JH",
+      "category": "land_inheritance",
+      "language": "hi",
+      "inputText": "Notice from the Circle Office (Anchal Karyalaya), Khunti, Jharkhand. Subject: objection to mutation (Dakhil-Kharij) of Khata No. 214, Plot 88, village Torpa. The late Ramlal Munda's brother has applied to transfer the land into his own name. Ramlal Munda died last year leaving his widow Radha Devi and one daughter. Radha Devi has received this notice and wants to object and claim her share as the widow.",
+      "expect": {
+        "category": "land_inheritance",
+        "mustCite": [{ "code": "PERSONAL_LAW", "section": "8" }, { "code": "PERSONAL_LAW", "section": "14" }],
+        "shouldCite": [{ "code": "NALSA", "section": "12" }, { "code": "PERSONAL_LAW", "section": "10" }],
+        "mustNotCite": [{ "code": "BNS", "section": "63" }, { "code": "BNS", "section": "103" }],
+        "forumKeywords": ["circle", "mutation", "dakhil"],
+        "portalHost": "jharbhoomi.jharkhand.gov.in",
+        "escalate": false
+      },
+      "adjudication": { "by": "", "barId": "", "date": "", "notes": "Widow is a Class-I heir (HSA §8 + Schedule) and holds her share absolutely (HSA §14). Forum is the Circle Officer for mutation; NALSA aid available to a widow." }
+    },
+    {
+      "id": "land-widow-up-01",
+      "state": "UP",
+      "category": "land_inheritance",
+      "language": "hi",
+      "inputText": "Tehsil office notice, Sadar Tehsil, Varanasi, Uttar Pradesh. Regarding Khatauni entry / namantaran (mutation) of agricultural plot Gata No. 341. The husband Shri Mohan Lal died; his brother is recorded as sole bhumidhar. The widow Sunita Devi and her two daughters were left out of the Khatauni. She wants her name entered and her share recognised.",
+      "expect": {
+        "category": "land_inheritance",
+        "mustCite": [{ "code": "PERSONAL_LAW", "section": "8" }, { "code": "PERSONAL_LAW", "section": "14" }],
+        "shouldCite": [{ "code": "NALSA", "section": "12" }],
+        "mustNotCite": [{ "code": "PERSONAL_LAW", "section": "15" }],
+        "forumKeywords": ["tehsil", "mutation", "khatauni"],
+        "portalHost": "upbhulekh.gov.in",
+        "escalate": false
+      },
+      "adjudication": { "by": "", "barId": "", "date": "", "notes": "Same succession logic; UP forum is the Tehsil (Lekhpal/Tehsildar) and the record is the Khatauni. HSA §15 governs a FEMALE intestate's property — not applicable here, so it is a mustNotCite trap." }
+    },
+    {
+      "id": "land-daughter-mh-01",
+      "state": "MH",
+      "category": "land_inheritance",
+      "language": "mr",
+      "inputText": "7/12 extract (Satbara) dispute, Talathi office, Baramati taluka, Pune district, Maharashtra. The father held ancestral agricultural land. After his death only the two sons were entered in the 7/12; the daughter Kavita was excluded on the ground that daughters have no share. She wants her equal coparcenary share recognised.",
+      "expect": {
+        "category": "land_inheritance",
+        "mustCite": [{ "code": "PERSONAL_LAW", "section": "6" }],
+        "shouldCite": [{ "code": "PERSONAL_LAW", "section": "8" }, { "code": "NALSA", "section": "12" }],
+        "mustNotCite": [],
+        "forumKeywords": ["talathi", "tahsildar", "mutation", "7/12"],
+        "portalHost": "bhulekh.mahabhumi.gov.in",
+        "escalate": false
+      },
+      "adjudication": { "by": "", "barId": "", "date": "", "notes": "Post-2005 HSA §6: a daughter is a coparcener by birth with equal rights in ancestral property (Vineeta Sharma v. Rakesh Sharma, 2020). Maharashtra forum: Talathi/Tahsildar; record is the 7/12." }
+    },
+    {
+      "id": "fir-denial-wb-01",
+      "state": "WB",
+      "category": "fir_denial",
+      "language": "bn",
+      "inputText": "Written complaint. I went to the local police station in Howrah, West Bengal to report that my neighbour threatened me and forcibly occupied part of my homestead land. The officer refused to register my FIR and told me to go away. I want the FIR registered and, if the SHO still refuses, to approach the Magistrate.",
+      "expect": {
+        "category": "fir_denial",
+        "mustCite": [{ "code": "BNSS", "section": "173" }, { "code": "BNSS", "section": "175" }],
+        "shouldCite": [{ "code": "NALSA", "section": "12" }, { "code": "BNS", "section": "199" }],
+        "mustNotCite": [{ "code": "PERSONAL_LAW", "section": "8" }],
+        "forumKeywords": ["police", "magistrate", "superintendent"],
+        "escalate": false
+      },
+      "adjudication": { "by": "", "barId": "", "date": "", "notes": "BNSS §173 = duty to register information in cognizable cases (old CrPC §154). BNSS §175 lets the Magistrate order investigation (old §156(3)). Remedy escalates from SHO → SP → Magistrate. Land succession law is irrelevant here (mustNotCite)." }
+    },
+    {
+      "id": "dv-tn-01",
+      "state": "TN",
+      "category": "domestic_violence",
+      "language": "ta",
+      "inputText": "My husband and his mother in Madurai, Tamil Nadu have been beating me and demanding more dowry — gold and money — from my parents since the marriage. Last week he threatened to throw me out. I am scared and want protection and to file a complaint against them.",
+      "expect": {
+        "category": "domestic_violence",
+        "mustCite": [{ "code": "BNS", "section": "85" }, { "code": "BNS", "section": "86" }],
+        "shouldCite": [{ "code": "NALSA", "section": "12" }, { "code": "BNS", "section": "80" }],
+        "mustNotCite": [],
+        "forumKeywords": ["police", "protection officer", "women"],
+        "escalate": true
+      },
+      "adjudication": { "by": "", "barId": "", "date": "", "notes": "BNS §85/§86 = cruelty by husband or his relatives (old IPC §498A) + statutory definition of cruelty. Sensitive category — MUST always escalate to human review regardless of confidence." }
+    },
+    {
+      "id": "fir-denial-br-01",
+      "state": "BR",
+      "category": "fir_denial",
+      "language": "hi",
+      "inputText": "Complaint from Gaya, Bihar. My motorcycle was stolen from outside my house and the thana refused to write an FIR, saying it is a small matter. I need the FIR registered so I can claim insurance and pursue the case.",
+      "expect": {
+        "category": "fir_denial",
+        "mustCite": [{ "code": "BNSS", "section": "173" }, { "code": "BNSS", "section": "175" }],
+        "shouldCite": [{ "code": "NALSA", "section": "12" }],
+        "mustNotCite": [{ "code": "BNS", "section": "85" }],
+        "forumKeywords": ["police", "magistrate", "superintendent"],
+        "escalate": false
+      },
+      "adjudication": { "by": "", "barId": "", "date": "", "notes": "Same FIR-registration duty under BNSS §173/§175. Domestic-violence sections are a mustNotCite trap — theft is not a matrimonial cruelty offence." }
+    },
+    {
+      "id": "rti-corpusgap-01",
+      "state": "IN",
+      "category": "rti",
+      "language": "hi",
+      "inputText": "I applied for my old-age pension eight months ago and it has not started. The block office gives no answer. I want to file an RTI to find out the status of my pension application and who is responsible for the delay.",
+      "expect": {
+        "category": "rti",
+        "mustCite": [],
+        "shouldCite": [{ "code": "NALSA", "section": "12" }],
+        "mustNotCite": [{ "code": "PERSONAL_LAW", "section": "8" }],
+        "forumKeywords": ["public information officer", "pio", "rti"],
+        "escalate": false,
+        "knownCorpusGap": "The RTI Act, 2005 is not yet in the corpus; the tool must rely on the RTI portal + NALSA aid and must NOT fabricate a section. This case measures honest behaviour under a gap."
+      },
+      "adjudication": { "by": "", "barId": "", "date": "", "notes": "Corpus does not contain the RTI Act. Correct behaviour: cite nothing substantive, point to the PIO / rtionline.gov.in, and NOT invent a BNS/BNSS section. Tests refuse-vs-hallucinate under a known gap." }
+    },
+    {
+      "id": "nonlegal-guard-01",
+      "state": "IN",
+      "category": "other",
+      "language": "en",
+      "inputText": "System architecture diagram. Frontend (Next.js) calls an API gateway which fans out to five agent microservices and a vector database. Arrows show request flow and a Redis cache sits between the gateway and the agents.",
+      "expect": {
+        "category": "other",
+        "isLegalDocument": false,
+        "mustCite": [],
+        "shouldCite": [],
+        "mustNotCite": [{ "code": "PERSONAL_LAW", "section": "8" }, { "code": "BNSS", "section": "173" }],
+        "forumKeywords": [],
+        "escalate": false
+      },
+      "adjudication": { "by": "", "barId": "", "date": "", "notes": "Not a legal document. The Document Agent must set isLegalDocument=false and the pipeline must STOP and warn — never fabricate a legal plan. Tests the non-legal guard." }
+    }
+  ]
+}

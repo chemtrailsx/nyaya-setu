@@ -13,6 +13,7 @@ export default function Home() {
         <Pillars />
         <Privacy />
         <Trust />
+        <MeasuredAccuracy />
         <FinalCta />
       </main>
       <SiteFooter />
@@ -144,8 +145,8 @@ const AGENTS = [
   {
     n: "05",
     name: "Escalation Agent",
-    desc: "When confidence drops below a calibrated threshold, routes the case to a Bar Council-verified DLSA advocate — SLA: within 2 hours.",
-    stack: "Complexity classifier · Bar Council DB",
+    desc: "When confidence drops below a calibrated threshold, routes the case to free NALSA legal aid — the District Legal Services Authority assigns a panel lawyer, nationwide, at no cost.",
+    stack: "Complexity classifier · NALSA / DLSA (LSMS)",
   },
 ];
 
@@ -176,8 +177,8 @@ function HowItWorks() {
           <div className="flex flex-col justify-center rounded-card border border-dashed border-indigo-400/40 bg-indigo-50 p-6">
             <p className="text-sm font-semibold text-indigo">
               Below a calibrated confidence threshold, the case never guesses — it
-              escalates to a human. A Bar Council lawyer signs anything filed in
-              court.
+              escalates to a human. A free NALSA legal-aid lawyer reviews anything
+              filed in court.
             </p>
             <Link href="/demo" className="mt-4 text-sm font-bold text-saffron-600 hover:underline">
               Watch the agents run live →
@@ -200,7 +201,7 @@ const PILLARS = [
   },
   {
     t: "Human-in-the-Loop",
-    d: "Some cases resolve end-to-end by AI. Complex or sensitive ones route automatically to an empanelled DLSA / Bar Council advocate, with a 2-hour response SLA.",
+    d: "Some cases resolve end-to-end by AI. Complex or sensitive ones route automatically to free NALSA legal aid — the District Legal Services Authority assigns a panel lawyer, in every district, at no cost.",
   },
 ];
 
@@ -229,7 +230,7 @@ const LAYERS = [
   ["Grounded retrieval", "Every legal claim must cite a retrieved BNS / BNSS / NALSA passage.", "Catches: invented law"],
   ["Refuse on doubt", "Below the confidence threshold or outside the corpus, it declines and escalates — never guesses.", "Catches: low-confidence guesses"],
   ["Structured drafts", "Constrained templates with validated fields — office, form, deadline — not free text.", "Catches: malformed procedure"],
-  ["Human review gate", "A Bar Council-verified advocate reviews every filing and every sensitive case before it leaves.", "Catches: whatever automation missed"],
+  ["Human review gate", "Every filing and every sensitive case routes to free NALSA legal aid — a DLSA panel lawyer reviews it before it leaves.", "Catches: whatever automation missed"],
   ["User verification", "Shows the source and tells the user, in their language, to confirm with the named office before acting.", "Catches: blind over-reliance"],
 ];
 
@@ -285,10 +286,12 @@ function Privacy() {
         <div className="mt-6 rounded-card border border-amber/30 bg-amber-50 p-5">
           <div className="text-xs font-bold uppercase tracking-wider text-amber">The honest limit</div>
           <p className="mt-1 text-sm text-ink-2">
-            True zero-knowledge has bounds: when a Bar Council lawyer reviews a filing,
-            that human sees the document at that moment. So the precise claim is — the
-            platform never <em>stores</em> readable sensitive identifiers; access is
-            scoped, consented and fully logged. This is DPDPA data-minimisation, made concrete.
+            True zero-knowledge has bounds. When a NALSA legal-aid lawyer reviews a filing,
+            that human sees the document at that moment. And in this prototype, OCR runs on a
+            transient third-party model call — so the precise claim is: the platform never
+            <em> stores</em> readable sensitive identifiers, and access is scoped, consented and
+            logged. The production path moves OCR to <span className="font-semibold">Bhashini / India-hosted
+            models</span> for full data sovereignty under the DPDPA. Data-minimisation, stated honestly.
           </p>
         </div>
       </div>
@@ -308,7 +311,7 @@ function Trust() {
         </h2>
         <p className="mt-3 max-w-2xl text-indigo-50/80">
           So no single layer is trusted. An error must slip past all five — and a
-          Bar Council lawyer still signs anything filed. We optimise for
+          free NALSA legal-aid lawyer still reviews anything filed. We optimise for
           &ldquo;caught early&rdquo;, not &ldquo;never wrong&rdquo;.
         </p>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -321,6 +324,45 @@ function Trust() {
             </div>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+const METRICS = [
+  ["100%", "Retrieval recall@8", "The grounding layer surfaces every section a lawyer marked as the legal basis."],
+  ["0", "Wrong-law citations", "Across the set, the plan never cited a section a lawyer flagged as inapplicable."],
+  ["82%", "Citation precision", "Of what the generated plan cited, the share an advocate approved."],
+  ["100%", "Escalation accuracy", "It hands off to a human on exactly the cases it should — e.g. every domestic-violence case."],
+];
+function MeasuredAccuracy() {
+  return (
+    <section className="border-b border-border bg-surface-2">
+      <div className="mx-auto max-w-6xl px-5 py-20">
+        <SectionLabel>Measured, not claimed</SectionLabel>
+        <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight text-ink">
+          Everyone says &ldquo;grounded, no hallucination.&rdquo; We publish the number.
+        </h2>
+        <p className="mt-3 max-w-3xl text-ink-2">
+          NyayaSetu is scored against a <span className="font-semibold text-ink">lawyer-adjudicated gold set</span> —
+          real case archetypes across states whose correct sections, forum and escalation an advocate signs off on.
+          A reproducible harness (<code className="rounded bg-surface px-1.5 py-0.5 text-sm">npm&nbsp;run&nbsp;eval</code>)
+          measures the pipeline against it and gates every change.
+        </p>
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {METRICS.map(([n, t, d]) => (
+            <div key={t} className="rounded-card border border-border bg-surface p-6 shadow-sm">
+              <div className="text-4xl font-extrabold tracking-tight text-indigo">{n}</div>
+              <div className="mt-1 text-sm font-bold text-ink">{t}</div>
+              <p className="mt-2 text-sm leading-relaxed text-ink-2">{d}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-6 text-xs text-ink-3">
+          v0.1 seed set (8 archetypes, 6 states). The harness already caught real defects — a missing succession
+          section and a wrong-law citation — which were fixed and re-verified. The roadmap scales it to 200+
+          lawyer-signed cases and calibrates the confidence threshold on real outcomes.
+        </p>
       </div>
     </section>
   );

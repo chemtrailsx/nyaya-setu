@@ -16,6 +16,7 @@ import { runStrategyAgent } from "@/lib/agents/strategy-agent";
 import { runDraftingAgent } from "@/lib/agents/drafting-agent";
 import { runTrackingAgent } from "@/lib/agents/tracking-agent";
 import { runEscalationAgent } from "@/lib/agents/escalation-agent";
+import { resolveJurisdiction } from "@/lib/jurisdiction";
 import type {
   AgentName,
   CaseEvent,
@@ -32,6 +33,11 @@ export interface PipelineOptions {
   /** Force output in this language regardless of the document's language.
    *  When omitted, output follows the detected document language. */
   outputLanguage?: LanguageCode;
+  /** The user's state (e.g. "UP", "MH"). When omitted, the state is detected
+   *  from the document text; failing that, generic national language is used.
+   *  Land/revenue procedure is a State subject, so this drives the right
+   *  portal, record name, office and officer. */
+  stateCode?: string;
 }
 
 export async function runPipeline(
@@ -79,6 +85,12 @@ export async function runPipeline(
     const outputLang: LanguageCode = opts.outputLanguage ?? document.language;
     state.language = outputLang;
     state.category = document.category;
+    // Resolve the governing state: the user's pick wins, else detect from the
+    // document, else national fallback. Drives state-correct offices/portals.
+    const jurisdiction = resolveJurisdiction(
+      opts.stateCode,
+      `${document.extractedText} ${document.summary}`,
+    );
     state.confidence.ocr = document.ocrConfidence;
     state.confidence.classification = document.classificationConfidence;
     log(
@@ -100,8 +112,12 @@ export async function runPipeline(
     }
 
     // ── 02 Strategy (grounded RAG) ─────────────────────────────────────────
-    log("strategy", "running", "Retrieving statute and generating a grounded action plan…");
-    const strategy = await runStrategyAgent(document, outputLang);
+    log(
+      "strategy",
+      "running",
+      `Retrieving statute and generating a grounded action plan (${jurisdiction.name})…`,
+    );
+    const strategy = await runStrategyAgent(document, outputLang, jurisdiction);
     state.strategy = strategy;
     state.confidence.retrieval = strategy.retrievalScore;
     log(
@@ -115,7 +131,7 @@ export async function runPipeline(
     let draftConfidence: number | undefined;
     if (strategy.steps.length > 0) {
       log("drafting", "running", "Drafting the filing in the user's language…");
-      const draft = await runDraftingAgent(document, strategy, outputLang);
+      const draft = await runDraftingAgent(document, strategy, outputLang, jurisdiction);
       state.draft = draft;
       draftConfidence = draft.draftConfidence;
       log(
@@ -138,13 +154,17 @@ export async function runPipeline(
 
     // ── Branch ─────────────────────────────────────────────────────────────
     if (gate.escalate) {
-      log("escalation", "running", "Routing to a Bar Council-verified advocate…");
-      const esc = await runEscalationAgent({ category: state.category ?? "other", reason: gate.reason });
+      log("escalation", "running", "Routing to free NALSA legal aid (DLSA) for human review…");
+      const esc = await runEscalationAgent({
+        category: state.category ?? "other",
+        reason: gate.reason,
+        jurisdiction,
+      });
       state.escalation = esc;
       log(
         "escalation",
         "escalated",
-        `Assigned to ${esc.advocate.name} (${esc.advocate.dlsaDistrict}); SLA ${esc.slaHours}h · ref ${esc.bookingRef}.`,
+        `Routed to ${esc.authority.name} — ${esc.authority.scope}; helpline ${esc.authority.helpline} · ref ${esc.bookingRef}.`,
       );
       emit({ type: "agent_result", agent: "escalation", result: esc });
     } else {

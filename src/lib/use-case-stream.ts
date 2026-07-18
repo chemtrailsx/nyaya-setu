@@ -38,16 +38,16 @@ export function useCaseStream() {
   const abort = useRef<AbortController | null>(null);
 
   const run = useCallback(
-    async (imageBase64: string, mediaType: string, language?: string, phone?: string) => {
+    async (imageBase64: string, mediaType: string, language?: string, stateCode?: string, phone?: string, demo?: boolean) => {
       abort.current?.abort();
       abort.current = new AbortController();
       setState({ ...INITIAL, running: true });
 
       try {
-        const res = await fetch("/api/case", {
+        const res = await fetch(demo ? "/api/case?demo=1" : "/api/case", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64, mediaType, language, phone }),
+          body: JSON.stringify(demo ? { demo: true } : { imageBase64, mediaType, language, stateCode, phone }),
           signal: abort.current.signal,
         });
 

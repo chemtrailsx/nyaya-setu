@@ -127,9 +127,8 @@ export function formatCaseForWhatsApp(state: CaseState): string {
   }
 
   if (state.escalated && state.escalation) {
-    parts.push(
-      `\n${L.escalated(state.escalation.advocate.name, state.escalation.advocate.dlsaDistrict, state.escalation.slaHours)}`,
-    );
+    const a = state.escalation.authority;
+    parts.push(`\n${L.escalated(a.name, a.scope, state.escalation.slaHours)}`);
   }
   if (state.tracking?.nextHearing) parts.push(`\n${L.nextHearing(state.tracking.nextHearing)}`);
 

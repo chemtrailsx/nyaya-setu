@@ -9,6 +9,7 @@
  * we deep-link to the real government portal but never auto-submit on it.
  */
 import { getTextLLM } from "@/lib/llm";
+import { jurisdictionPromptBlock, resolveJurisdiction, type Jurisdiction } from "@/lib/jurisdiction";
 import { SUPPORTED_LANGUAGES } from "@/lib/types";
 import type {
   CollectDoc,
@@ -22,7 +23,7 @@ import type {
 /** The packet each case type typically needs, in filing order. */
 const PACKET_BY_CATEGORY: Record<string, string> = {
   land_inheritance:
-    "1) free legal-aid application to the District Legal Services Authority (nalsa_form_1); 2) Legal Heir Certificate / affidavit of heirship (legal_heir_certificate); 3) the land Mutation application 'Dakhil-Kharij' / written objection-reply for the Circle Officer (mutation_objection)",
+    "1) free legal-aid application to the District Legal Services Authority (nalsa_form_1); 2) Legal Heir Certificate / affidavit of heirship (legal_heir_certificate); 3) the land mutation application / written objection-reply for the revenue officer, using the local mutation term for this state (mutation_objection)",
   fir_denial:
     "1) written complaint to the Superintendent of Police seeking FIR registration under BNSS (fir_complaint); 2) free legal-aid application to the District Legal Services Authority (nalsa_form_1)",
   domestic_violence:
@@ -33,13 +34,20 @@ const PACKET_BY_CATEGORY: Record<string, string> = {
 };
 
 /** Real official portals. The model may ONLY mark a form "online" if it maps to
- *  one of these; anything else is "print" (print, sign, submit / notarise). */
-const PORTALS = `- Land mutation (Dakhil-Kharij), Jharkhand: "JharBhoomi" — https://jharbhoomi.jharkhand.gov.in
+ *  one of these; anything else is "print" (print, sign, submit / notarise). The
+ *  land-records portal is state-specific, so it is injected per jurisdiction. */
+function portalsFor(j: Jurisdiction): string {
+  const land =
+    j.code === "IN"
+      ? `- Land mutation / records (national): "${j.landPortalName}" — ${j.landPortalUrl}`
+      : `- Land mutation / records, ${j.name}: "${j.landPortalName}" — ${j.landPortalUrl}`;
+  return `${land}
 - Free legal aid (NALSA, all-India): "NALSA LSMS" — https://scourtapp.nic.in/lsams
 - RTI, central government: "RTI Online" — https://rtionline.gov.in
 - Consumer complaint (all-India): "e-Daakhil" — https://edaakhil.nic.in
 - Women's complaint (all-India): "NCW Online" — https://ncwapps.nic.in/onlinecomplaintsv2
 - Birth/Death certificate: "CRS" — https://crsorgi.gov.in`;
+}
 
 const SYSTEM = `You are the Drafting Agent of NyayaSetu — a legal and procedural expert for
 rural India. You produce the real forms a person must file for their case, each
@@ -52,6 +60,7 @@ export async function runDraftingAgent(
   doc: DocumentAgentResult,
   strategy: StrategyAgentResult,
   outputLang: LanguageCode,
+  jurisdiction: Jurisdiction = resolveJurisdiction(),
 ): Promise<DraftAgentResult> {
   const langName = SUPPORTED_LANGUAGES[outputLang].name;
   const packet = PACKET_BY_CATEGORY[doc.category] ?? PACKET_BY_CATEGORY.other;
@@ -68,8 +77,10 @@ NALSA free legal aid eligible: ${strategy.nalsaEligible ? "yes" : "unknown"}
 
 For this case type the packet should be: ${packet}
 
+${jurisdictionPromptBlock(jurisdiction)}
+
 OFFICIAL PORTALS (mark a form "online" ONLY if it maps to one of these; else "print"):
-${PORTALS}
+${portalsFor(jurisdiction)}
 
 Return this exact JSON:
 {
@@ -93,6 +104,7 @@ Return this exact JSON:
   "draftConfidence": <0..1 how procedurally correct this packet is>
 }
 Rules:
+- For any land/revenue form, address it to ${jurisdiction.revenueOffice} / ${jurisdiction.revenueOfficer}, use the local mutation term (${jurisdiction.mutationTerm}), and if online use ONLY the ${jurisdiction.name} land portal above — never another state's.
 - 2 to 3 forms, ordered by what to file FIRST. 3 to 8 real fields per form.
 - Every [Label] placeholder in a body MUST match a field label exactly.
 - Everything (names, purposes, fields, bodies) in ${langName}.

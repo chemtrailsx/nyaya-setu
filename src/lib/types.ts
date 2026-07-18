@@ -190,9 +190,24 @@ export interface TrackingUpdate {
   simulated: boolean;
 }
 
+/**
+ * Every human handoff routes to the statutory free-legal-aid ladder under the
+ * Legal Services Authorities Act, 1987 — NALSA → SLSA (state) → DLSA (district).
+ * This is uniform across all of India, so it is the safe anchor in every state,
+ * and the aid is FREE for eligible users. We never invent a private advocate.
+ */
 export interface EscalationResult {
   reason: string;
-  advocate: { name: string; barId: string; dlsaDistrict: string };
+  authority: {
+    name: string; // e.g. "District Legal Services Authority (DLSA)"
+    scope: string; // which district/state it covers, in plain terms
+    helpline: string; // NALSA free legal-aid helpline: "15100"
+    portalName: string; // "NALSA Legal Services (LSMS)"
+    portalUrl: string; // the real portal to register a legal-aid request
+    howToReach: string; // plain-language: how to reach them / walk in
+  };
+  /** The free legal-aid application the user files to formally register with NALSA. */
+  registrationForm: { kind: DraftKind; title: string; submissionMode: "online" | "print"; portalUrl: string };
   slaHours: number;
   bookingRef: string;
   simulated: boolean;
