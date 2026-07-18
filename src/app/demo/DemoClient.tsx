@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCheck, Loader2, Download, Volume2, Square, Phone, Mic, Send, MessageCircle, X, MapPin, ExternalLink, Printer, CheckCircle2, ClipboardList } from "lucide-react";
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
-import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type DraftDocument, type LanguageCode } from "@/lib/types";
+import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type DraftDocument } from "@/lib/types";
 import { STATE_OPTIONS } from "@/lib/jurisdiction";
 import { cn } from "@/lib/utils";
 
@@ -31,12 +31,6 @@ function mapLink(office?: string, address?: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
-// One-click sample documents so judges can test instantly.
-const EXAMPLES = [
-  { url: "/examples/radha-land-notice.png", name: "radha-land-notice.png", label: "Land / inheritance dispute", hint: "Widow's mutation case" },
-  { url: "/examples/fir-denial-notice.png", name: "fir-denial-notice.png", label: "FIR denial (women-first)", hint: "Dense advocate's legal notice" },
-];
-
 // A single shared audio channel so starting one read-aloud stops any other.
 let currentAudio: HTMLAudioElement | null = null;
 function stopSpeaking() {
@@ -46,14 +40,6 @@ function stopSpeaking() {
   }
   if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
 }
-
-const AGENT_META: Record<AgentName, { label: string; icon: typeof FileText }> = {
-  document: { label: "Document Agent", icon: FileText },
-  strategy: { label: "Strategy Agent", icon: Scale },
-  drafting: { label: "Drafting Agent", icon: PenLine },
-  tracking: { label: "Tracking Agent", icon: BellRing },
-  escalation: { label: "Escalation Agent", icon: UserCheck },
-};
 
 export function DemoClient() {
   const { state, run, reset } = useCaseStream();
@@ -78,19 +64,6 @@ export function DemoClient() {
     run(image.dataUrl, image.mediaType, lang, stateCode === "auto" ? undefined : stateCode);
   };
 
-  // Load a bundled example image and run it in one click.
-  const loadExample = async (url: string, name: string) => {
-    stopSpeaking();
-    const blob = await (await fetch(url)).blob();
-    const dataUrl = await new Promise<string>((resolve) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result as string);
-      r.readAsDataURL(blob);
-    });
-    const img = { dataUrl, mediaType: blob.type || "image/png", name };
-    setImage(img);
-    run(img.dataUrl, img.mediaType, lang, stateCode === "auto" ? undefined : stateCode);
-  };
   // The BCP-47 tag to read results aloud with: the chosen language, or the
   // document's detected language when on auto.
   const speakLang = lang !== "auto" ? lang : state.results.document?.language ?? "en";
@@ -165,27 +138,13 @@ export function DemoClient() {
           </p>
 
           <div className="mt-4">
-            <span className="text-xs font-semibold text-ink-3">Or try an example</span>
-            <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {EXAMPLES.map((ex) => (
-                <button
-                  key={ex.url}
-                  onClick={() => loadExample(ex.url, ex.name)}
-                  disabled={state.running}
-                  className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-left transition hover:border-saffron disabled:opacity-40"
-                >
-                  <span className="block text-sm font-bold text-ink">{ex.label}</span>
-                  <span className="block text-xs text-ink-3">{ex.hint}</span>
-                </button>
-              ))}
-            </div>
+            <span className="text-xs font-semibold text-ink-3">Don&apos;t have a document handy?</span>
             <button
               onClick={playSample}
               disabled={state.running}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo/30 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo transition hover:border-indigo disabled:opacity-40"
-              title="Replays a pre-recorded case — works even with no internet or API quota"
+              className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo/30 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo transition hover:border-indigo disabled:opacity-40"
             >
-              ▶ Play sample case (works offline)
+              ▶ See a sample case
             </button>
           </div>
 
@@ -224,7 +183,7 @@ export function DemoClient() {
               disabled={!image || state.running}
               className="flex-1 rounded-xl bg-saffron px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-saffron-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {state.running ? "Running…" : "Run the 5 agents →"}
+              {state.running ? "Working…" : "Get my help →"}
             </button>
             {hasRun && (
               <button onClick={startOver} className="rounded-xl border border-border px-4 py-3 text-sm font-semibold text-ink-2 hover:bg-surface-2">
@@ -258,7 +217,6 @@ export function DemoClient() {
         {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
         {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
-        {state.results.signals && <ConfidencePanel results={state.results} />}
       </div>
       <FloatingChat
         results={state.results}
@@ -269,7 +227,15 @@ export function DemoClient() {
   );
 }
 
-/* ── Agent trace ────────────────────────────────────────────────────────── */
+/* ── Progress ───────────────────────────────────────────────────────────── */
+// Plain-language steps a user understands — no internal agent jargon.
+const PROGRESS_LABEL: Record<AgentName, { label: string; icon: typeof FileText }> = {
+  document: { label: "Reading your document", icon: FileText },
+  strategy: { label: "Finding the law that applies to you", icon: Scale },
+  drafting: { label: "Preparing your plan and forms", icon: PenLine },
+  tracking: { label: "Setting up your case", icon: BellRing },
+  escalation: { label: "Connecting you to a free lawyer", icon: UserCheck },
+};
 function AgentTrace({ events, escalated, running }: { events: CaseEvent[]; escalated: boolean; running: boolean }) {
   const flow: AgentName[] = ["document", "strategy", "drafting", escalated ? "escalation" : "tracking"];
   const statusOf = (a: AgentName) => {
@@ -280,29 +246,27 @@ function AgentTrace({ events, escalated, running }: { events: CaseEvent[]; escal
   };
   return (
     <div className="rounded-card border border-border bg-surface p-5 shadow-sm">
-      <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Live agent trace</h2>
+      <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Progress</h2>
       <ol className="mt-4 space-y-1">
         {flow.map((a) => {
           const st = statusOf(a);
-          const { label, icon: Icon } = AGENT_META[a];
-          const msg = [...events].reverse().find((e) => e.agent === a)?.message;
+          const { label, icon: Icon } = PROGRESS_LABEL[a];
           return (
             <li key={a} className="flex gap-3">
               <div className="flex flex-col items-center">
                 <span className={cn("flex h-8 w-8 items-center justify-center rounded-full border", st === "done" ? "border-green bg-green-50 text-green" : st === "running" ? "border-saffron bg-saffron-50 text-saffron-600" : "border-border bg-surface-2 text-ink-3")}>
-                  {st === "running" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+                  {st === "running" ? <Loader2 className="h-4 w-4 animate-spin" /> : st === "done" ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                 </span>
                 <span className="my-0.5 h-full w-px flex-1 bg-border last:hidden" />
               </div>
               <div className="pb-4">
                 <div className={cn("text-sm font-bold", st === "pending" ? "text-ink-3" : "text-ink")}>{label}</div>
-                {msg && st !== "pending" && <p className="mt-0.5 text-xs leading-snug text-ink-2">{msg}</p>}
               </div>
             </li>
           );
         })}
       </ol>
-      {running && <p className="text-xs italic text-ink-3">Working…</p>}
+      {running && <p className="text-xs italic text-ink-3">Please wait a moment…</p>}
     </div>
   );
 }
@@ -342,59 +306,7 @@ function DocumentPanel({ results, speakLang }: { results: CaseResults; speakLang
           </p>
         </div>
       ) : null}
-      {d.extractedText && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-semibold text-ink-3">Show extracted text (OCR)</summary>
-          <pre className="deva mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-2 p-3 text-xs text-ink-2" lang={d.language}>{d.extractedText}</pre>
-        </details>
-      )}
     </Card>
-  );
-}
-
-function ConfidencePanel({ results }: { results: CaseResults }) {
-  const s = results.signals!;
-  const ens = results.ensemble ?? 0;
-  const escalated = !!results.escalation;
-  return (
-    <Card
-      title="How sure is the AI?"
-      badge={<Chip tone={escalated ? "amber" : "green"}>{escalated ? "Sent to a lawyer" : "Confident enough"}</Chip>}
-    >
-      <p className="mb-4 text-xs leading-relaxed text-ink-2">
-        Before it trusts itself, NyayaSetu scores <strong>three independent checks</strong> — how clearly it
-        read your document, how sure it is of the case type, and how well it matched <em>real</em> law. They
-        combine into one score. If that score falls below <strong>0.72</strong>, the case is automatically
-        handed to a <strong>human lawyer</strong> instead of guessing. That&apos;s the safety switch.
-      </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Meter label="Reading the document" value={s.ocr} />
-        <Meter label="Understanding the case" value={s.classification} />
-        <Meter label="Matching real law" value={s.retrieval} />
-      </div>
-      <div className="mt-4 border-t border-border pt-3">
-        <Meter label="Overall score (needs 0.72+)" value={ens} big tone={escalated ? "amber" : "green"} />
-        <p className="mt-2 text-xs text-ink-3">
-          {escalated
-            ? "Below the safety line — routed to free NALSA legal aid (helpline 15100); a DLSA panel lawyer reviews this case instead."
-            : "Above the safety line, so the plan is shown. You're still told to confirm with the office named above."}
-        </p>
-      </div>
-    </Card>
-  );
-}
-
-function Meter({ label, value, big, tone = "indigo" }: { label: string; value: number; big?: boolean; tone?: "indigo" | "green" | "amber" }) {
-  const pct = Math.round(value * 100);
-  const color = tone === "green" ? "var(--green)" : tone === "amber" ? "var(--amber)" : "var(--indigo)";
-  return (
-    <div className="min-w-0">
-      <div className="text-xs leading-tight text-ink-3">{label}</div>
-      <div className={cn("mt-0.5 font-bold", big ? "text-2xl" : "text-lg")} style={{ color }}>{value.toFixed(2)}</div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-      </div>
-    </div>
   );
 }
 
@@ -447,28 +359,11 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
                     <MapPin className="h-3 w-3" /> Open in Maps ↗
                   </a>
                 ) : null}
-                {s.citations?.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {s.citations.map((c, i) => (
-                      <span key={i} className="rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo">{c.code} §{c.section}</span>
-                    ))}
-                  </div>
-                ) : null}
               </div>
             </div>
           </li>
         ))}
       </ol>
-      {st.citedChunks?.length ? (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-semibold text-ink-3">Grounding — {st.citedChunks.length} retrieved passages</summary>
-          <ul className="mt-2 space-y-1 text-xs text-ink-2">
-            {st.citedChunks.map((c) => (
-              <li key={c.id}><span className="font-semibold text-indigo">{c.code} §{c.section}</span> {c.title} <span className="text-ink-3">({c.score.toFixed(2)})</span></li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
     </Card>
   );
 }
@@ -814,9 +709,9 @@ function FloatingChat({ results, speakLang, caseReady }: { results: CaseResults;
 function TrackingPanel({ results }: { results: CaseResults }) {
   const t = results.tracking!;
   return (
-    <Card title="Case tracking" badge={t.simulated ? <Chip tone="amber">Simulated NJDG/eCourts</Chip> : undefined}>
+    <Card title="Your case tracking" badge={t.simulated ? <Chip tone="amber">Sample</Chip> : undefined}>
       <dl className="grid grid-cols-2 gap-2 text-sm">
-        <Info k="CNR" v={t.cnr ?? "—"} />
+        <Info k="Case number" v={t.cnr ?? "—"} />
         <Info k="Status" v={t.status} />
         <Info k="Next hearing" v={t.nextHearing ?? "—"} />
       </dl>
@@ -1037,8 +932,8 @@ function EmptyState() {
   return (
     <div className="flex h-full min-h-64 flex-col items-center justify-center rounded-card border border-dashed border-border bg-surface p-10 text-center">
       <Scale className="h-8 w-8 text-ink-3" />
-      <p className="mt-3 font-bold text-ink">Document in. Justice out.</p>
-      <p className="mt-1 max-w-sm text-sm text-ink-3">Upload a legal document and watch five agents read it, ground a strategy in real statute, draft the filing, and track the case — live.</p>
+      <p className="mt-3 font-bold text-ink">Your help will appear here</p>
+      <p className="mt-1 max-w-sm text-sm text-ink-3">Take a photo of your legal document to get a simple, step-by-step plan in your language — what it means, where to go, and which forms to fill.</p>
     </div>
   );
 }
