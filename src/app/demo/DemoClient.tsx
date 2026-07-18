@@ -31,6 +31,19 @@ function mapLink(office?: string, address?: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
+// Real-WORLD-FORMAT sample documents reviewers can run through the live pipeline.
+// Names/addresses are fictional (safe to share) but each follows the genuine
+// format of that document type — spanning states and case categories so the
+// engine can be tested on varied, realistic inputs. Files live in /public/examples.
+const SAMPLE_DOCS: { file: string; mediaType: string; label: string; hint: string }[] = [
+  { file: "/examples/radha-land-notice.png", mediaType: "image/png", label: "Land & inheritance — mutation dispute (Jharkhand)", hint: "Widow vs. paternal relatives · Hindu Succession Act" },
+  { file: "/examples/legal-notice-property-maharashtra.pdf", mediaType: "application/pdf", label: "Property legal notice — encroachment (Maharashtra)", hint: "Advocate's notice · 7/12 land · Pune" },
+  { file: "/examples/fir-denial-notice.png", mediaType: "image/png", label: "FIR denial — women-first (advocate's notice)", hint: "Police refused to register · BNSS 173 / 175" },
+  { file: "/examples/fir-theft-up.pdf", mediaType: "application/pdf", label: "FIR — motorcycle theft (Uttar Pradesh)", hint: "BNS 303 theft · Lucknow" },
+  { file: "/examples/dv-cruelty-rajasthan.pdf", mediaType: "application/pdf", label: "Domestic violence — cruelty & dowry (Rajasthan)", hint: "BNS 85 / 86 · auto-escalates to a lawyer" },
+  { file: "/examples/cheating-complaint-karnataka.pdf", mediaType: "application/pdf", label: "Cheating / fraud complaint (Karnataka)", hint: "BNS 318 · fake plot allotment · Bengaluru" },
+];
+
 // A single shared audio channel so starting one read-aloud stops any other.
 let currentAudio: HTMLAudioElement | null = null;
 function stopSpeaking() {
@@ -48,6 +61,7 @@ export function DemoClient() {
   // The user's state drives state-correct offices/portals (land is a State
   // subject). "auto" → detect from the document, else national fallback.
   const [stateCode, setStateCode] = useState("auto");
+  const [sampleOpen, setSampleOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +88,21 @@ export function DemoClient() {
     stopSpeaking();
     setImage(null);
     run("", "", "auto", undefined, undefined, true);
+  };
+
+  // Load a bundled real-world-format sample and run it through the live pipeline.
+  const runSampleDoc = async (file: string, mediaType: string) => {
+    stopSpeaking();
+    setSampleOpen(false);
+    const blob = await (await fetch(file)).blob();
+    const dataUrl = await new Promise<string>((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.readAsDataURL(blob);
+    });
+    const type = blob.type || mediaType;
+    setImage({ dataUrl, mediaType: type, name: file.split("/").pop() ?? "sample" });
+    run(dataUrl, type, lang, stateCode === "auto" ? undefined : stateCode);
   };
 
   const startOver = () => {
@@ -139,12 +168,41 @@ export function DemoClient() {
 
           <div className="mt-4">
             <span className="text-xs font-semibold text-ink-3">Don&apos;t have a document handy?</span>
+            <div className="relative mt-1.5">
+              <button
+                onClick={() => setSampleOpen((v) => !v)}
+                disabled={state.running}
+                className="flex w-full items-center justify-between gap-2 rounded-lg border border-indigo/30 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo transition hover:border-indigo disabled:opacity-40"
+              >
+                <span className="flex items-center gap-1.5"><ClipboardList className="h-4 w-4" /> Sample real-world legal docs</span>
+                <span className="text-xs">{sampleOpen ? "▴" : "▾"}</span>
+              </button>
+              {sampleOpen && (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+                  {SAMPLE_DOCS.map((s) => (
+                    <button
+                      key={s.file}
+                      onClick={() => runSampleDoc(s.file, s.mediaType)}
+                      disabled={state.running}
+                      className="block w-full border-b border-border px-3 py-2 text-left transition last:border-0 hover:bg-surface-2 disabled:opacity-40"
+                    >
+                      <span className="block text-sm font-semibold text-ink">{s.label}</span>
+                      <span className="block text-xs text-ink-3">{s.hint}</span>
+                    </button>
+                  ))}
+                  <div className="bg-surface-2 px-3 py-2 text-[11px] leading-snug text-ink-3">
+                    Realistic formats with fictional names — safe to share. For genuine public FIRs, use the{" "}
+                    <a href="https://cctns.delhipolice.gov.in/citizen/firSearch.htm" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo hover:underline">Delhi Police FIR portal ↗</a>.
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={playSample}
               disabled={state.running}
-              className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo/30 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo transition hover:border-indigo disabled:opacity-40"
+              className="mt-2 text-xs font-semibold text-indigo hover:underline disabled:opacity-40"
             >
-              ▶ See a sample case
+              or play an offline sample (works with no internet) →
             </button>
           </div>
 
