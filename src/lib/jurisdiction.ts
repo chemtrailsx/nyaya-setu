@@ -18,7 +18,9 @@
 export const NALSA = {
   helpline: "15100",
   portalName: "NALSA Legal Services (LSMS)",
-  portalUrl: "https://scourtapp.nic.in/lsams",
+  // Deep link to the actual online application-filing form (no login needed),
+  // not just the portal home — so "open the form" opens the real form.
+  portalUrl: "https://scourtapp.nic.in/lsams/nologin/applicationFiling.action?requestLocale=en",
   siteUrl: "https://nalsa.gov.in",
 } as const;
 

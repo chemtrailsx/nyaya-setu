@@ -164,6 +164,9 @@ export interface DraftDocument {
   portalUrl?: string; // the real official portal to submit on
   fields: FormField[]; // the real form's fields, in filing order
   body: string; // the full fillable draft, with [Label] placeholders matching fields
+  submitTo?: string; // whom to hand the form to (desk / officer / clerk)
+  contact?: string; // a helpline or office number to call about this filing
+  afterSubmit?: string; // plain-language: what happens next in the case after filing
 }
 
 /** A supporting document she must obtain first, and where to get it. */

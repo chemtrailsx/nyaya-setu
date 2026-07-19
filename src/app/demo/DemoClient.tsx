@@ -5,6 +5,7 @@ import { Camera, Images, FileText, Scale, PenLine, BellRing, UserCheck, ShieldCh
 import { useCaseStream, type CaseResults } from "@/lib/use-case-stream";
 import { SUPPORTED_LANGUAGES, type AgentName, type CaseEvent, type DraftDocument } from "@/lib/types";
 import { STATE_OPTIONS } from "@/lib/jurisdiction";
+import { ui } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 // Output-language options (the user picks per run; "auto" follows the document).
@@ -42,16 +43,21 @@ function urlOf(s?: string): string | null {
   return s?.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
 }
 
-/** A contact/location line that is always actionable: a portal URL becomes a
- *  link, a phone/helpline becomes a tap-to-call link, and anything else (an
- *  office/place name) becomes a Google-Maps search. */
-function LinkyLine({ icon, text }: { icon: string; text: string }) {
+// Phrases that are NOT a place ("you already have it", "not applicable", etc.),
+// across the supported languages — these must never become a Maps link.
+const NON_PLACE = /\b(yourself|you (already )?have|already (have|with)|in your possession|at home|self|not applicable|n\/?a|none|online)\b|स्वयं|अपने पास|आपके पास|घर पर|पहले से|নিজের কাছে|আপনার কাছে|উপলব্ধ|உங்களிடம்|கையில்|మీ వద్ద|మీ దగ్గర|స్వయం|स्वतःकडे|तुमच्याकडे/i;
+
+/** A contact/location line. A portal URL becomes a link and a phone/helpline a
+ *  tap-to-call link. With mapsFallback, a genuine place name becomes a Maps
+ *  search — but a "you already have it"-type phrase stays as plain text. */
+function LinkyLine({ icon, text, mapsFallback = false }: { icon: string; text: string; mapsFallback?: boolean }) {
   const url = urlOf(text);
   const tel = phoneOf(text);
-  const cls = "deva block text-xs text-indigo hover:underline";
-  if (url) return <a href={url} target="_blank" rel="noopener noreferrer" className={cls}>{icon} {text}</a>;
-  if (tel) return <a href={`tel:${tel}`} className={cls}>{icon} {text}</a>;
-  return <a href={mapLink(text)} target="_blank" rel="noopener noreferrer" className={cls}>{icon} {text}</a>;
+  const link = "deva block text-xs text-indigo hover:underline";
+  if (url) return <a href={url} target="_blank" rel="noopener noreferrer" className={link}>{icon} {text}</a>;
+  if (tel) return <a href={`tel:${tel}`} className={link}>{icon} {text}</a>;
+  if (mapsFallback && !NON_PLACE.test(text)) return <a href={mapLink(text)} target="_blank" rel="noopener noreferrer" className={link}>{icon} {text}</a>;
+  return <p className="deva block text-xs text-ink-3">{icon} {text}</p>;
 }
 
 // GENUINE FIRs pulled live from the Delhi Police public FIR portal
@@ -265,7 +271,7 @@ export function DemoClient() {
           </p>
         </div>
 
-        {hasRun && <AgentTrace events={state.events} escalated={!!state.results.escalation} running={state.running} />}
+        {hasRun && <AgentTrace events={state.events} escalated={!!state.results.escalation} running={state.running} lang={speakLang} />}
       </div>
 
       {/* Right: results */}
@@ -279,11 +285,11 @@ export function DemoClient() {
         )}
         {state.results.document?.isLegalDocument && <DocumentPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <PlanPanel results={state.results} speakLang={speakLang} />}
-        {state.results.strategy && <EligibilityCard eligible={state.results.strategy.nalsaEligible} />}
-        {state.results.draft?.documentsToCollect?.length ? <DocsToCollectCard results={state.results} /> : null}
+        {state.results.strategy && <EligibilityCard eligible={state.results.strategy.nalsaEligible} speakLang={speakLang} />}
+        {state.results.draft?.documentsToCollect?.length ? <DocsToCollectCard results={state.results} speakLang={speakLang} /> : null}
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
-        {state.results.escalation && <EscalationPanel results={state.results} />}
+        {state.results.escalation && <EscalationPanel results={state.results} speakLang={speakLang} />}
       </div>
       <FloatingChat
         results={state.results}
@@ -295,15 +301,17 @@ export function DemoClient() {
 }
 
 /* ── Progress ───────────────────────────────────────────────────────────── */
-// Plain-language steps a user understands — no internal agent jargon.
-const PROGRESS_LABEL: Record<AgentName, { label: string; icon: typeof FileText }> = {
-  document: { label: "Reading your document", icon: FileText },
-  strategy: { label: "Finding the law that applies to you", icon: Scale },
-  drafting: { label: "Preparing your plan and forms", icon: PenLine },
-  tracking: { label: "Setting up your case", icon: BellRing },
-  escalation: { label: "Connecting you to a free lawyer", icon: UserCheck },
+// Plain-language steps a user understands — no internal agent jargon. Labels are
+// localised via i18n; icons are static.
+const PROGRESS_ICON: Record<AgentName, typeof FileText> = {
+  document: FileText, strategy: Scale, drafting: PenLine, tracking: BellRing, escalation: UserCheck,
 };
-function AgentTrace({ events, escalated, running }: { events: CaseEvent[]; escalated: boolean; running: boolean }) {
+function AgentTrace({ events, escalated, running, lang }: { events: CaseEvent[]; escalated: boolean; running: boolean; lang: string }) {
+  const S = ui(lang);
+  const LABEL: Record<AgentName, string> = {
+    document: S.progReading, strategy: S.progFinding, drafting: S.progPreparing,
+    tracking: S.progSettingUp, escalation: S.progConnecting,
+  };
   const flow: AgentName[] = ["document", "strategy", "drafting", escalated ? "escalation" : "tracking"];
   const statusOf = (a: AgentName) => {
     const evs = events.filter((e) => e.agent === a);
@@ -313,11 +321,12 @@ function AgentTrace({ events, escalated, running }: { events: CaseEvent[]; escal
   };
   return (
     <div className="rounded-card border border-border bg-surface p-5 shadow-sm">
-      <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Progress</h2>
+      <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">{S.progressTitle}</h2>
       <ol className="mt-4 space-y-1">
         {flow.map((a) => {
           const st = statusOf(a);
-          const { label, icon: Icon } = PROGRESS_LABEL[a];
+          const label = LABEL[a];
+          const Icon = PROGRESS_ICON[a];
           return (
             <li key={a} className="flex gap-3">
               <div className="flex flex-col items-center">
@@ -333,7 +342,7 @@ function AgentTrace({ events, escalated, running }: { events: CaseEvent[]; escal
           );
         })}
       </ol>
-      {running && <p className="text-xs italic text-ink-3">Please wait a moment…</p>}
+      {running && <p className="text-xs italic text-ink-3">{S.pleaseWait}</p>}
     </div>
   );
 }
@@ -355,7 +364,7 @@ function DocumentPanel({ results, speakLang }: { results: CaseResults; speakLang
   const d = results.document!;
   return (
     <Card
-      title="What the document says"
+      title={ui(speakLang).docTitle}
       badge={
         <div className="flex items-center gap-2">
           <ListenButton text={d.summary} lang={speakLang} />
@@ -379,6 +388,7 @@ function DocumentPanel({ results, speakLang }: { results: CaseResults; speakLang
 
 function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const st = results.strategy!;
+  const S = ui(speakLang);
   const spoken = [
     st.rationale,
     ...st.steps.map((s) => [`${s.order}. ${s.action}`, s.officeAddress, s.contact].filter(Boolean).join(". ")),
@@ -387,11 +397,11 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
     .join(". ");
   return (
     <Card
-      title="Action plan"
+      title={S.planTitle}
       badge={
         <div className="flex items-center gap-2">
           <ListenButton text={spoken} lang={speakLang} />
-          {st.nalsaEligible ? <Chip tone="green">NALSA free aid</Chip> : null}
+          {st.nalsaEligible ? <Chip tone="green">{S.nalsaChip}</Chip> : null}
         </div>
       }
     >
@@ -405,16 +415,16 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
                 <p className="deva font-semibold text-ink">{s.action}</p>
                 {s.deadlineDays != null && (
                   <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-amber/30 bg-amber-50 px-2 py-1 text-xs font-bold text-amber">
-                    ⏳ Act within {s.deadlineDays} days — missing this deadline can bar your case
+                    ⏳ {S.actWithin(s.deadlineDays)}
                   </p>
                 )}
                 <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-ink-2">
-                  <Info k="Where to go" v={s.office} />
-                  <Info k="Whom to meet" v={s.officer} />
-                  {s.officeAddress ? <InfoWide k="How to reach" v={s.officeAddress} /> : null}
-                  {s.contact ? <InfoWide k="Who to contact" v={s.contact} /> : null}
-                  {s.forms?.length ? <Info k="What to file" v={s.forms.join(", ")} /> : null}
-                  <Info k="Fee" v={s.fee} />
+                  <Info k={S.whereToGo} v={s.office} />
+                  <Info k={S.whomToMeet} v={s.officer} />
+                  {s.officeAddress ? <InfoWide k={S.howToReach} v={s.officeAddress} /> : null}
+                  {s.contact ? <InfoWide k={S.whoToContact} v={s.contact} /> : null}
+                  {s.forms?.length ? <Info k={S.whatToFile} v={s.forms.join(", ")} /> : null}
+                  <Info k={S.fee} v={s.fee} />
                 </dl>
                 {s.office ? (
                   <a
@@ -423,7 +433,7 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
                     rel="noopener noreferrer"
                     className="mt-2 inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-2 py-1 text-xs font-semibold text-indigo hover:border-saffron"
                   >
-                    <MapPin className="h-3 w-3" /> Open in Maps ↗
+                    <MapPin className="h-3 w-3" /> {S.openInMaps} ↗
                   </a>
                 ) : null}
               </div>
@@ -436,19 +446,20 @@ function PlanPanel({ results, speakLang }: { results: CaseResults; speakLang: st
 }
 
 /** Supporting documents to collect before filing, and where to get them. */
-function DocsToCollectCard({ results }: { results: CaseResults }) {
+function DocsToCollectCard({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const list = results.draft?.documentsToCollect ?? [];
+  const S = ui(speakLang);
   if (!list.length) return null;
   return (
-    <Card title="Documents to collect first" badge={<ClipboardList className="h-4 w-4 text-indigo" />}>
-      <p className="mb-3 text-xs text-ink-2">Gather these before you file. If you don&apos;t have one, here&apos;s where to get it made.</p>
+    <Card title={S.docsTitle} badge={<ClipboardList className="h-4 w-4 text-indigo" />}>
+      <p className="mb-3 text-xs text-ink-2">{S.docsIntro}</p>
       <ul className="space-y-2">
         {list.map((c, i) => (
           <li key={i} className="flex items-start gap-2 rounded-lg border border-border bg-surface-2 p-2.5">
             <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-[11px] font-bold text-ink-3">{i + 1}</span>
             <div className="min-w-0">
               <p className="deva text-sm font-semibold text-ink">{c.name}</p>
-              {c.whereToGet && <LinkyLine icon="📍" text={c.whereToGet} />}
+              {c.whereToGet && <LinkyLine icon="📍" text={c.whereToGet} mapsFallback />}
               {c.contact && <LinkyLine icon="📞" text={c.contact} />}
             </div>
           </li>
@@ -461,19 +472,17 @@ function DocsToCollectCard({ results }: { results: CaseResults }) {
 /** The packet of real forms the user must fill and file, in order. */
 function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const d = results.draft!;
+  const S = ui(speakLang);
   if (!d.documents?.length) return null;
   return (
-    <Card title={`Forms to fill (${d.documents.length})`} badge={<Chip tone="green">Fill by voice</Chip>}>
-      <p className="mb-3 text-xs text-ink-2">
-        The real forms for your case. Open each, fill your details by <strong>typing or speaking</strong> —
-        your form fills in live below — then submit it yourself online or by printing it.
-      </p>
+    <Card title={S.formsTitle(d.documents.length)} badge={<Chip tone="green">{S.fillByVoice}</Chip>}>
+      <p className="mb-3 text-xs text-ink-2">{S.formsIntro}</p>
       <div className="space-y-3">
         {d.documents.map((doc, i) => (
           <FormCard key={i} doc={doc} index={i} speakLang={speakLang} />
         ))}
       </div>
-      <p className="mt-3 text-xs text-ink-3">⚠ We help you fill the real form; you submit it yourself on the official portal or at the office — nothing is auto-sent. For anything filed in court, free NALSA legal aid (helpline 15100) reviews it first.</p>
+      <p className="mt-3 text-xs text-ink-3">⚠ {S.formsDisclaimer}</p>
     </Card>
   );
 }
@@ -484,6 +493,7 @@ function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number
   const [open, setOpen] = useState(index === 0);
   const [values, setValues] = useState<Record<string, string>>({});
   const fields = doc.fields ?? [];
+  const S = ui(speakLang);
 
   const fill = (text: string) => {
     let out = text;
@@ -516,8 +526,8 @@ function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number
           {doc.office && <span className="mt-0.5 block text-xs text-ink-3">🏢 {doc.office}</span>}
         </span>
         <span className="shrink-0 text-right text-xs font-semibold">
-          <span className={cn("block rounded px-1.5 py-0.5", online ? "bg-green-50 text-green" : "bg-amber-50 text-amber")}>{online ? "File online" : "Print & submit"}</span>
-          <span className="mt-1 block text-indigo">{remaining > 0 ? `${remaining} to fill` : "ready"}</span>
+          <span className={cn("block rounded px-1.5 py-0.5", online ? "bg-green-50 text-green" : "bg-amber-50 text-amber")}>{online ? S.fileOnline : S.printSubmit}</span>
+          <span className="mt-1 block text-indigo">{remaining > 0 ? S.toFill(remaining) : S.ready}</span>
         </span>
       </button>
 
@@ -526,7 +536,7 @@ function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number
           {fields.length > 0 && (
             <div className="mb-3 rounded-lg border border-saffron/30 bg-saffron-50 p-3">
               <div className="flex items-center gap-1.5 text-xs font-bold text-saffron-600">
-                <Mic className="h-3.5 w-3.5" /> Fill in your details — type, or tap the mic and speak
+                <Mic className="h-3.5 w-3.5" /> {S.fillDetails}
               </div>
               <div className="mt-2 space-y-2.5">
                 {fields.map((f) => (
@@ -539,31 +549,47 @@ function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number
           {/* The actual form, filling in live as the user types — this IS the document they submit. */}
           <div className="mb-3">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs font-bold text-ink-3">Your form {remaining > 0 ? "(fills in as you type)" : "— ready"}</span>
+              <span className="text-xs font-bold text-ink-3">{S.yourForm} {remaining > 0 ? S.fillsAsYouType : S.formReady}</span>
               <ListenButton text={`${filledTitle}. ${filledBody}`} lang={speakLang} />
             </div>
             <pre className="deva max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed text-ink" lang={speakLang}>{filledBody}</pre>
           </div>
 
+          {/* Where/whom to give it to, a contact, and what happens next. */}
+          <dl className="mb-3 grid grid-cols-1 gap-1.5 rounded-lg border border-border bg-surface p-3 text-xs">
+            {(doc.submitTo || doc.office) && (
+              <div><dt className="text-ink-3">{S.giveTo}</dt><dd className="deva font-semibold text-ink">{doc.submitTo || doc.office}</dd></div>
+            )}
+            {doc.office && (
+              <div><dt className="text-ink-3">{S.whereSubmit}</dt><dd><a href={mapLink(doc.office, doc.officeAddress)} target="_blank" rel="noopener noreferrer" className="deva font-semibold text-indigo hover:underline">📍 {doc.officeAddress || doc.office} ↗</a></dd></div>
+            )}
+            {doc.contact && (
+              <div><dt className="text-ink-3">{S.contactLabel}</dt><dd><LinkyLine icon="📞" text={doc.contact} /></dd></div>
+            )}
+            {doc.afterSubmit && (
+              <div><dt className="text-ink-3">{S.whatNext}</dt><dd className="deva text-ink-2">{doc.afterSubmit}</dd></div>
+            )}
+          </dl>
+
           {/* Real next step — the user submits it themselves. Nothing is auto-sent. */}
           <div className="rounded-lg border border-indigo/20 bg-indigo-50 p-3">
-            <p className="text-xs font-bold text-ink">Submit it yourself — we never send it for you:</p>
+            <p className="text-xs font-bold text-ink">{S.submitYourself}</p>
             {online ? (
-              <p className="mt-1 text-xs text-ink-2">Fill your details into the real form on the official portal:</p>
+              <p className="mt-1 text-xs text-ink-2">{S.fillOnPortal}</p>
             ) : (
-              <p className="mt-1 flex items-start gap-1 text-xs text-ink-2"><Printer className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Download it, print, sign, and submit at <strong>{doc.office || "the office"}</strong>.</p>
+              <p className="mt-1 flex items-start gap-1 text-xs text-ink-2"><Printer className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {S.printAt(doc.office || "")}</p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {online && (
                 <a href={doc.portalUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1.5 text-xs font-bold text-white hover:bg-indigo-600">
-                  <ExternalLink className="h-3.5 w-3.5" /> Open the official form on {doc.portalName || "the portal"}
+                  <ExternalLink className="h-3.5 w-3.5" /> {S.openOfficial(doc.portalName || "the portal")}
                 </a>
               )}
               <button onClick={download} className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2">
-                <Download className="h-3.5 w-3.5" /> Download filled form
+                <Download className="h-3.5 w-3.5" /> {S.download}
               </button>
             </div>
-            {remaining > 0 && <p className="mt-2 text-[11px] text-amber">Fill the {remaining} field(s) above first so your form is complete.</p>}
+            {remaining > 0 && <p className="mt-2 text-[11px] text-amber">{S.fillFirst(remaining)}</p>}
           </div>
         </div>
       )}
@@ -771,11 +797,11 @@ function FloatingChat({ results, speakLang, caseReady }: { results: CaseResults;
   );
 }
 
-function EscalationPanel({ results }: { results: CaseResults }) {
+function EscalationPanel({ results, speakLang }: { results: CaseResults; speakLang: string }) {
   const e = results.escalation!;
   const a = e.authority;
   return (
-    <Card title="Human review — free NALSA legal aid" badge={<Chip tone="amber">Within {e.slaHours}h</Chip>}>
+    <Card title={ui(speakLang).escTitle} badge={<Chip tone="amber">Within {e.slaHours}h</Chip>}>
       <p className="text-sm text-ink-2">{e.reason}</p>
       <div className="mt-3 rounded-lg border border-border bg-surface-2 p-3">
         <div className="flex items-center gap-2">
@@ -812,39 +838,48 @@ function EscalationPanel({ results }: { results: CaseResults }) {
 }
 
 /** Free legal aid eligibility under §12 of the Legal Services Authorities Act,
- *  1987 — the concrete grounds a person qualifies on. Self-check, no submission. */
-const LSA12_GROUNDS = [
-  "A woman or a child",
-  "A member of a Scheduled Caste or Scheduled Tribe (SC/ST)",
-  "A person with a disability",
-  "A victim of trafficking, or of violence (incl. domestic violence)",
-  "A victim of a mass disaster, caste atrocity, flood, drought or earthquake",
-  "An industrial workman",
-  "A person in custody / a protective home / a juvenile home",
-  "Annual income below your State's legal-aid ceiling",
-];
-function EligibilityCard({ eligible }: { eligible?: boolean }) {
+ *  1987 — an interactive self-check: the user says whether any ground applies,
+ *  and is told, in their language, whether they qualify. */
+function EligibilityCard({ eligible, speakLang }: { eligible?: boolean; speakLang: string }) {
+  const S = ui(speakLang);
+  const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
   return (
     <Card
-      title="Are you eligible for FREE legal aid?"
-      badge={eligible ? <Chip tone="green">Likely eligible</Chip> : <Chip tone="indigo">Check below</Chip>}
+      title={S.eligTitle}
+      badge={eligible ? <Chip tone="green">{S.eligBadgeLikely}</Chip> : <Chip tone="indigo">{S.eligBadgeCheck}</Chip>}
     >
-      <p className="text-sm text-ink-2">
-        Under §12 of the Legal Services Authorities Act, 1987, legal aid is <span className="font-bold text-ink">free</span> if
-        <span className="font-semibold"> any one</span> of these applies to you:
-      </p>
+      <p className="deva text-sm text-ink-2">{S.eligIntro}</p>
       <ul className="mt-2 space-y-1.5">
-        {LSA12_GROUNDS.map((g) => (
+        {S.eligGrounds.map((g) => (
           <li key={g} className="flex items-start gap-2 text-sm text-ink-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green" />
             <span className="deva">{g}</span>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-ink-3">
-        The income ceiling is set by each State (higher for cases before the Supreme Court). To confirm and register, call the
-        free NALSA helpline <a href="tel:15100" className="font-bold text-indigo">15100</a>.
-      </p>
+      <p className="deva mt-3 text-sm font-bold text-ink">{S.eligQuestion}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          onClick={() => setAnswer("yes")}
+          className={cn("deva rounded-lg border px-3 py-1.5 text-sm font-bold transition", answer === "yes" ? "border-green bg-green-50 text-green" : "border-border text-ink-2 hover:border-green")}
+        >
+          {S.eligYes}
+        </button>
+        <button
+          onClick={() => setAnswer("no")}
+          className={cn("deva rounded-lg border px-3 py-1.5 text-sm font-bold transition", answer === "no" ? "border-amber bg-amber-50 text-amber" : "border-border text-ink-2 hover:border-amber")}
+        >
+          {S.eligNo}
+        </button>
+      </div>
+      {answer && (
+        <div className={cn("mt-3 flex items-start justify-between gap-2 rounded-lg border p-3", answer === "yes" ? "border-green/30 bg-green-50" : "border-amber/30 bg-amber-50")}>
+          <p className={cn("deva text-sm font-semibold", answer === "yes" ? "text-green" : "text-ink-2")}>
+            {answer === "yes" ? S.eligibleMsg : S.notEligibleMsg}
+          </p>
+          <a href="tel:15100" className="shrink-0 rounded-lg bg-saffron px-2.5 py-1.5 text-xs font-bold text-white hover:bg-saffron-600">15100</a>
+        </div>
+      )}
     </Card>
   );
 }
@@ -859,9 +894,10 @@ function Info({ k, v }: { k: string; v: string }) {
   );
 }
 function HelplinesCard({ speakLang }: { speakLang: string }) {
+  const S = ui(speakLang);
   const spoken = HELPLINES.map((h) => `${h.label}, ${h.num.split("").join(" ")}`).join(". ");
   return (
-    <Card title="Free helplines — tap to call" badge={<ListenButton text={spoken} lang={speakLang} />}>
+    <Card title={S.helplinesTitle} badge={<ListenButton text={spoken} lang={speakLang} />}>
       <div className="grid grid-cols-2 gap-2">
         {HELPLINES.map((h) => (
           <a

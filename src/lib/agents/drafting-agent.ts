@@ -42,7 +42,7 @@ function portalsFor(j: Jurisdiction): string {
       ? `- Land mutation / records (national): "${j.landPortalName}" — ${j.landPortalUrl}`
       : `- Land mutation / records, ${j.name}: "${j.landPortalName}" — ${j.landPortalUrl}`;
   return `${land}
-- Free legal aid (NALSA, all-India): "NALSA LSMS" — https://scourtapp.nic.in/lsams
+- Free legal aid (NALSA, all-India): "NALSA LSMS" — https://scourtapp.nic.in/lsams/nologin/applicationFiling.action?requestLocale=en
 - RTI, central government: "RTI Online" — https://rtionline.gov.in
 - Consumer complaint (all-India): "e-Daakhil" — https://edaakhil.nic.in
 - Women's complaint (all-India): "NCW Online" — https://ncwapps.nic.in/onlinecomplaintsv2
@@ -98,7 +98,10 @@ Return this exact JSON:
       "portalName": "<portal name if online, else omit>",
       "portalUrl": "<the exact portal URL from the list if online, else omit>",
       "fields": [ { "label": "<real field label of THIS form, in ${langName}>", "hint": "<short example/format>" } ],
-      "body": "<the COMPLETE formal form/letter in ${langName} — salutation, subject, body, prayer, signature block — with a [Label] placeholder for EACH field above, ready to print and sign>"
+      "body": "<the COMPLETE formal form/letter in ${langName} — salutation, subject, body, prayer, signature block — with a [Label] placeholder for EACH field above, ready to print and sign>",
+      "submitTo": "<in ${langName}: exactly WHO to hand this form to — the desk/officer/clerk, e.g. 'the Circle Officer's reader (peshkar)' or 'the front desk / receiving counter'>",
+      "contact": "<a real helpline or office phone to call about this filing, e.g. 'NALSA 15100' or 'the Circle Office'>",
+      "afterSubmit": "<in ${langName}, 1-2 simple sentences: what happens NEXT in her case after she submits this — e.g. a receipt/acknowledgement number, a hearing/inquiry date, or an officer's inspection — so she knows what to expect>"
     }
   ],
   "draftConfidence": <0..1 how procedurally correct this packet is>
@@ -131,6 +134,9 @@ Rules:
       portalUrl: d.submissionMode === "online" ? d.portalUrl : undefined,
       fields: Array.isArray(d.fields) ? d.fields.filter((f) => f?.label).slice(0, 8) : [],
       body: d.body!,
+      submitTo: d.submitTo || undefined,
+      contact: d.contact || undefined,
+      afterSubmit: d.afterSubmit || undefined,
     }));
 
   const documentsToCollect: CollectDoc[] = (Array.isArray(out.documentsToCollect) ? out.documentsToCollect : [])
