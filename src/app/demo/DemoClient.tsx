@@ -31,17 +31,38 @@ function mapLink(office?: string, address?: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
-// Real-WORLD-FORMAT sample documents reviewers can run through the live pipeline.
-// Names/addresses are fictional (safe to share) but each follows the genuine
-// format of that document type — spanning states and case categories so the
-// engine can be tested on varied, realistic inputs. Files live in /public/examples.
-const SAMPLE_DOCS: { file: string; mediaType: string; label: string; hint: string }[] = [
-  { file: "/examples/radha-land-notice.png", mediaType: "image/png", label: "Land & inheritance — mutation dispute (Jharkhand)", hint: "Widow vs. paternal relatives · Hindu Succession Act" },
-  { file: "/examples/legal-notice-property-maharashtra.pdf", mediaType: "application/pdf", label: "Property legal notice — encroachment (Maharashtra)", hint: "Advocate's notice · 7/12 land · Pune" },
-  { file: "/examples/fir-denial-notice.png", mediaType: "image/png", label: "FIR denial — women-first (advocate's notice)", hint: "Police refused to register · BNSS 173 / 175" },
-  { file: "/examples/fir-theft-up.pdf", mediaType: "application/pdf", label: "FIR — motorcycle theft (Uttar Pradesh)", hint: "BNS 303 theft · Lucknow" },
-  { file: "/examples/dv-cruelty-rajasthan.pdf", mediaType: "application/pdf", label: "Domestic violence — cruelty & dowry (Rajasthan)", hint: "BNS 85 / 86 · auto-escalates to a lawyer" },
-  { file: "/examples/cheating-complaint-karnataka.pdf", mediaType: "application/pdf", label: "Cheating / fraud complaint (Karnataka)", hint: "BNS 318 · fake plot allotment · Bengaluru" },
+/** Pull a dialable number (phone/helpline) out of free text, if present. */
+function phoneOf(s?: string): string | null {
+  const m = s?.match(/\+?\d[\d\s-]{2,}\d/);
+  const digits = m?.[0].replace(/[^\d+]/g, "") ?? "";
+  return digits.length >= 3 ? digits : null;
+}
+/** Pull a URL out of free text, if present. */
+function urlOf(s?: string): string | null {
+  return s?.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
+}
+
+/** A contact/location line that is always actionable: a portal URL becomes a
+ *  link, a phone/helpline becomes a tap-to-call link, and anything else (an
+ *  office/place name) becomes a Google-Maps search. */
+function LinkyLine({ icon, text }: { icon: string; text: string }) {
+  const url = urlOf(text);
+  const tel = phoneOf(text);
+  const cls = "deva block text-xs text-indigo hover:underline";
+  if (url) return <a href={url} target="_blank" rel="noopener noreferrer" className={cls}>{icon} {text}</a>;
+  if (tel) return <a href={`tel:${tel}`} className={cls}>{icon} {text}</a>;
+  return <a href={mapLink(text)} target="_blank" rel="noopener noreferrer" className={cls}>{icon} {text}</a>;
+}
+
+// GENUINE FIRs pulled live from the Delhi Police public FIR portal
+// (cctns.delhipolice.gov.in) — real scanned government documents, so reviewers
+// can test the engine on authentic real-world inputs. Personal identifiers are
+// masked by the Document Agent at OCR time. Files live in /public/examples/real.
+const REAL_CASES: { file: string; mediaType: string; label: string; hint: string }[] = [
+  { file: "/examples/real/fir-0149.pdf", mediaType: "application/pdf", label: "Real FIR — street food-cart vendor", hint: "Obstruction of public way · Civil Lines, Delhi" },
+  { file: "/examples/real/fir-0056.pdf", mediaType: "application/pdf", label: "Real FIR — defacement of public property", hint: "Govt. school · Civil Lines, Delhi" },
+  { file: "/examples/real/fir-0129.pdf", mediaType: "application/pdf", label: "Real FIR — public nuisance (BNS §285)", hint: "Civil Lines, Delhi" },
+  { file: "/examples/real/fir-0151.pdf", mediaType: "application/pdf", label: "Real FIR — footpath stall obstruction", hint: "Civil Lines, Delhi" },
 ];
 
 // A single shared audio channel so starting one read-aloud stops any other.
@@ -61,7 +82,6 @@ export function DemoClient() {
   // The user's state drives state-correct offices/portals (land is a State
   // subject). "auto" → detect from the document, else national fallback.
   const [stateCode, setStateCode] = useState("auto");
-  const [sampleOpen, setSampleOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -93,7 +113,6 @@ export function DemoClient() {
   // Load a bundled real-world-format sample and run it through the live pipeline.
   const runSampleDoc = async (file: string, mediaType: string) => {
     stopSpeaking();
-    setSampleOpen(false);
     const blob = await (await fetch(file)).blob();
     const dataUrl = await new Promise<string>((resolve) => {
       const r = new FileReader();
@@ -167,36 +186,27 @@ export function DemoClient() {
           </p>
 
           <div className="mt-4">
-            <span className="text-xs font-semibold text-ink-3">Don&apos;t have a document handy?</span>
-            <div className="relative mt-1.5">
-              <button
-                onClick={() => setSampleOpen((v) => !v)}
-                disabled={state.running}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-indigo/30 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo transition hover:border-indigo disabled:opacity-40"
-              >
-                <span className="flex items-center gap-1.5"><ClipboardList className="h-4 w-4" /> Sample real-world legal docs</span>
-                <span className="text-xs">{sampleOpen ? "▴" : "▾"}</span>
-              </button>
-              {sampleOpen && (
-                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
-                  {SAMPLE_DOCS.map((s) => (
-                    <button
-                      key={s.file}
-                      onClick={() => runSampleDoc(s.file, s.mediaType)}
-                      disabled={state.running}
-                      className="block w-full border-b border-border px-3 py-2 text-left transition last:border-0 hover:bg-surface-2 disabled:opacity-40"
-                    >
-                      <span className="block text-sm font-semibold text-ink">{s.label}</span>
-                      <span className="block text-xs text-ink-3">{s.hint}</span>
-                    </button>
-                  ))}
-                  <div className="bg-surface-2 px-3 py-2 text-[11px] leading-snug text-ink-3">
-                    Realistic formats with fictional names — safe to share. For genuine public FIRs, use the{" "}
-                    <a href="https://cctns.delhipolice.gov.in/citizen/firSearch.htm" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo hover:underline">Delhi Police FIR portal ↗</a>.
-                  </div>
-                </div>
-              )}
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-3">
+              <ClipboardList className="h-3.5 w-3.5" /> Or test on a real published FIR
+            </span>
+            <div className="mt-1.5 grid grid-cols-1 gap-2">
+              {REAL_CASES.map((c) => (
+                <button
+                  key={c.file}
+                  onClick={() => runSampleDoc(c.file, c.mediaType)}
+                  disabled={state.running}
+                  className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-left transition hover:border-saffron disabled:opacity-40"
+                >
+                  <span className="block text-sm font-bold text-ink">{c.label}</span>
+                  <span className="block text-xs text-ink-3">{c.hint}</span>
+                </button>
+              ))}
             </div>
+            <p className="mt-1.5 text-[11px] leading-snug text-ink-3">
+              Genuine scanned FIRs from the{" "}
+              <a href="https://cctns.delhipolice.gov.in/citizen/firSearch.htm" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo hover:underline">Delhi Police public FIR portal ↗</a>{" "}
+              — personal IDs are masked automatically.
+            </p>
             <button
               onClick={playSample}
               disabled={state.running}
@@ -273,7 +283,6 @@ export function DemoClient() {
         {state.results.draft?.documentsToCollect?.length ? <DocsToCollectCard results={state.results} /> : null}
         {state.results.draft && <DraftPanel results={state.results} speakLang={speakLang} />}
         {state.results.strategy && <HelplinesCard speakLang={speakLang} />}
-        {state.results.tracking && <TrackingPanel results={state.results} />}
         {state.results.escalation && <EscalationPanel results={state.results} />}
       </div>
       <FloatingChat
@@ -439,8 +448,8 @@ function DocsToCollectCard({ results }: { results: CaseResults }) {
             <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-[11px] font-bold text-ink-3">{i + 1}</span>
             <div className="min-w-0">
               <p className="deva text-sm font-semibold text-ink">{c.name}</p>
-              {c.whereToGet && <p className="deva text-xs text-ink-2">📍 {c.whereToGet}</p>}
-              {c.contact && <p className="deva text-xs text-ink-3">📞 {c.contact}</p>}
+              {c.whereToGet && <LinkyLine icon="📍" text={c.whereToGet} />}
+              {c.contact && <LinkyLine icon="📞" text={c.contact} />}
             </div>
           </li>
         ))}
@@ -456,15 +465,15 @@ function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: s
   return (
     <Card title={`Forms to fill (${d.documents.length})`} badge={<Chip tone="green">Fill by voice</Chip>}>
       <p className="mb-3 text-xs text-ink-2">
-        The real forms for your case. Open each, fill your details by <strong>typing or speaking</strong>,
-        then file it online or print &amp; submit at the office.
+        The real forms for your case. Open each, fill your details by <strong>typing or speaking</strong> —
+        your form fills in live below — then submit it yourself online or by printing it.
       </p>
       <div className="space-y-3">
         {d.documents.map((doc, i) => (
           <FormCard key={i} doc={doc} index={i} speakLang={speakLang} />
         ))}
       </div>
-      <p className="mt-3 text-xs text-ink-3">⚠ Filling is real; submission here is a safe simulation — nothing is sent to a government portal. For anything filed in court, free NALSA legal aid (helpline 15100) reviews it first.</p>
+      <p className="mt-3 text-xs text-ink-3">⚠ We help you fill the real form; you submit it yourself on the official portal or at the office — nothing is auto-sent. For anything filed in court, free NALSA legal aid (helpline 15100) reviews it first.</p>
     </Card>
   );
 }
@@ -474,7 +483,6 @@ function DraftPanel({ results, speakLang }: { results: CaseResults; speakLang: s
 function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number; speakLang: string }) {
   const [open, setOpen] = useState(index === 0);
   const [values, setValues] = useState<Record<string, string>>({});
-  const [ref, setRef] = useState<string | null>(null);
   const fields = doc.fields ?? [];
 
   const fill = (text: string) => {
@@ -497,8 +505,6 @@ function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number
     a.href = url; a.download = `${doc.kind}.txt`; a.click();
     URL.revokeObjectURL(url);
   };
-  const submit = () =>
-    setRef(`NS-${(doc.kind.replace(/[^a-z]/gi, "").slice(0, 3).toUpperCase() || "DOC")}-${Date.now().toString(36).slice(-6).toUpperCase()}`);
 
   return (
     <div className="rounded-lg border border-border bg-surface-2">
@@ -510,17 +516,17 @@ function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number
           {doc.office && <span className="mt-0.5 block text-xs text-ink-3">🏢 {doc.office}</span>}
         </span>
         <span className="shrink-0 text-right text-xs font-semibold">
-          <span className={cn("block rounded px-1.5 py-0.5", online ? "bg-green-50 text-green" : "bg-amber-50 text-amber")}>{online ? "Online" : "Print"}</span>
-          <span className="mt-1 block text-indigo">{ref ? "filed ✓" : remaining > 0 ? `${remaining} to fill` : "ready"}</span>
+          <span className={cn("block rounded px-1.5 py-0.5", online ? "bg-green-50 text-green" : "bg-amber-50 text-amber")}>{online ? "File online" : "Print & submit"}</span>
+          <span className="mt-1 block text-indigo">{remaining > 0 ? `${remaining} to fill` : "ready"}</span>
         </span>
       </button>
 
       {open && (
         <div className="border-t border-border p-3">
-          {fields.length > 0 && !ref && (
+          {fields.length > 0 && (
             <div className="mb-3 rounded-lg border border-saffron/30 bg-saffron-50 p-3">
               <div className="flex items-center gap-1.5 text-xs font-bold text-saffron-600">
-                <Mic className="h-3.5 w-3.5" /> Fill the form — type, or tap the mic and speak
+                <Mic className="h-3.5 w-3.5" /> Fill in your details — type, or tap the mic and speak
               </div>
               <div className="mt-2 space-y-2.5">
                 {fields.map((f) => (
@@ -530,34 +536,35 @@ function FormCard({ doc, index, speakLang }: { doc: DraftDocument; index: number
             </div>
           )}
 
-          <details className="mb-3">
-            <summary className="cursor-pointer text-xs font-semibold text-ink-3">Preview the filled form</summary>
-            <pre className="deva mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed text-ink" lang={speakLang}>{filledBody}</pre>
-          </details>
-
-          {ref ? (
-            <div className="rounded-lg border border-green/30 bg-green-50 p-3">
-              <div className="flex items-center gap-1.5 text-sm font-bold text-green"><CheckCircle2 className="h-4 w-4" /> Submitted (simulation)</div>
-              <p className="mt-1 text-xs text-ink-2">Reference: <span className="font-bold text-ink">{ref}</span> · Status: <strong>Received, under review</strong></p>
-              <p className="mt-2 text-xs text-ink-3">This is a safe demo — nothing was sent to a government website. To file for real:</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {online ? (
-                  <a href={doc.portalUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600"><ExternalLink className="h-3 w-3" /> File on {doc.portalName || "the portal"}</a>
-                ) : (
-                  <button onClick={download} className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-600"><Printer className="h-3 w-3" /> Print &amp; submit at {doc.office || "the office"}</button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <button onClick={submit} disabled={remaining > 0} className="flex items-center gap-1 rounded-lg bg-saffron px-3 py-1.5 text-xs font-bold text-white hover:bg-saffron-600 disabled:opacity-40">
-                <Send className="h-3 w-3" /> Submit form{remaining > 0 ? ` (${remaining} left)` : ""}
-              </button>
-              {online && <a href={doc.portalUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-indigo hover:border-saffron"><ExternalLink className="h-3 w-3" /> {doc.portalName || "Portal"}</a>}
-              <button onClick={download} className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2"><Download className="h-3 w-3" /> Download</button>
+          {/* The actual form, filling in live as the user types — this IS the document they submit. */}
+          <div className="mb-3">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs font-bold text-ink-3">Your form {remaining > 0 ? "(fills in as you type)" : "— ready"}</span>
               <ListenButton text={`${filledTitle}. ${filledBody}`} lang={speakLang} />
             </div>
-          )}
+            <pre className="deva max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed text-ink" lang={speakLang}>{filledBody}</pre>
+          </div>
+
+          {/* Real next step — the user submits it themselves. Nothing is auto-sent. */}
+          <div className="rounded-lg border border-indigo/20 bg-indigo-50 p-3">
+            <p className="text-xs font-bold text-ink">Submit it yourself — we never send it for you:</p>
+            {online ? (
+              <p className="mt-1 text-xs text-ink-2">Fill your details into the real form on the official portal:</p>
+            ) : (
+              <p className="mt-1 flex items-start gap-1 text-xs text-ink-2"><Printer className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Download it, print, sign, and submit at <strong>{doc.office || "the office"}</strong>.</p>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {online && (
+                <a href={doc.portalUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg bg-indigo px-2.5 py-1.5 text-xs font-bold text-white hover:bg-indigo-600">
+                  <ExternalLink className="h-3.5 w-3.5" /> Open the official form on {doc.portalName || "the portal"}
+                </a>
+              )}
+              <button onClick={download} className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2">
+                <Download className="h-3.5 w-3.5" /> Download filled form
+              </button>
+            </div>
+            {remaining > 0 && <p className="mt-2 text-[11px] text-amber">Fill the {remaining} field(s) above first so your form is complete.</p>}
+          </div>
         </div>
       )}
     </div>
@@ -761,25 +768,6 @@ function FloatingChat({ results, speakLang, caseReady }: { results: CaseResults;
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
       </button>
     </>
-  );
-}
-
-function TrackingPanel({ results }: { results: CaseResults }) {
-  const t = results.tracking!;
-  return (
-    <Card title="Your case tracking" badge={t.simulated ? <Chip tone="amber">Sample</Chip> : undefined}>
-      <dl className="grid grid-cols-2 gap-2 text-sm">
-        <Info k="Case number" v={t.cnr ?? "—"} />
-        <Info k="Status" v={t.status} />
-        <Info k="Next hearing" v={t.nextHearing ?? "—"} />
-      </dl>
-      {t.alertsSent.map((a, i) => (
-        <div key={i} className="mt-3 rounded-lg border border-green/30 bg-green-50 p-3">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-green"><BellRing className="h-3.5 w-3.5" />WhatsApp alert sent</div>
-          <p className="deva mt-1 text-sm text-ink">{a.message}</p>
-        </div>
-      ))}
-    </Card>
   );
 }
 
