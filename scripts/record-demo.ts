@@ -12,15 +12,17 @@ import { join } from "node:path";
 import { runPipeline } from "@/lib/agents/orchestrator";
 import type { ImageInput, StreamEvent } from "@/lib/types";
 
-const EXAMPLE = "public/examples/radha-land-notice.png";
+// A GENUINE scanned FIR from the Delhi Police public portal, so even the
+// offline-safe replay runs on a real document (nothing synthetic anywhere).
+const EXAMPLE = "public/examples/real/fir-0149.pdf";
 const OUT = "src/lib/demo/canned-run.json";
 
 (async () => {
   const base64 = readFileSync(join(process.cwd(), EXAMPLE)).toString("base64");
-  const image: ImageInput = { base64, mediaType: "image/png" };
+  const image: ImageInput = { base64, mediaType: "application/pdf" };
 
   const events: StreamEvent[] = [];
-  console.log("Recording a real run of the Radha land/inheritance case…");
+  console.log("Recording a real run of a genuine Delhi Police FIR…");
   await runPipeline(image, { outputLanguage: "en" }, (e) => {
     events.push(e);
     if (e.type === "event") console.log(`  · ${e.event.agent} ${e.event.status}`);
