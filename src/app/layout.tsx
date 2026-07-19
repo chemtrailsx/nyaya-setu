@@ -17,9 +17,9 @@ const notoSansDeva = Noto_Sans_Devanagari({
 });
 
 export const metadata: Metadata = {
-  title: "NyayaSetu · न्याय सेतु — Agentic Legal Aid for Rural India",
+  title: "NyayaSetu — Free Legal Help",
   description:
-    "Document in, justice out. A five-agent AI engine that reads a photographed legal document, grounds a strategy in the Bharatiya Nyaya Sanhita, drafts filings in the user's language, and tracks the case — with a lawyer in the loop.",
+    "Take a photo of a legal document — FIR, land paper, court notice or letter — and get simple, step-by-step help in your own language, free.",
 };
 
 export default function RootLayout({
