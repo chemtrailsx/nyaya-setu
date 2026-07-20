@@ -46,3 +46,6 @@ __pycache__/
 
 # Office lock/temp files
 ~$*
+
+# Pitch decks — keep local, not in the public repo
+*.pptx
