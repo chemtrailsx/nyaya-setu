@@ -46,6 +46,15 @@ export const config = {
     // The WhatsApp-enabled sender, e.g. "whatsapp:+14155238886" (Twilio sandbox).
     from: process.env.TWILIO_WHATSAPP_FROM || "",
   },
+  // Meta WhatsApp Cloud API (free tier) — panelists message the number directly,
+  // no "join code". Set these from the Meta App dashboard + a verify token you pick.
+  whatsappCloud: {
+    token: process.env.WHATSAPP_TOKEN || "",
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || "",
+    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || "",
+    appSecret: process.env.WHATSAPP_APP_SECRET || "", // optional: webhook signature check
+    apiVersion: process.env.WHATSAPP_API_VERSION || "v21.0",
+  },
   supabase: {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
@@ -64,6 +73,8 @@ export const hasAnthropic = () => config.anthropic.apiKey.length > 0;
 export const hasGroq = () => config.groq.apiKey.length > 0;
 export const hasTwilio = () =>
   config.twilio.accountSid.length > 0 && config.twilio.authToken.length > 0 && config.twilio.from.length > 0;
+export const hasWhatsAppCloud = () =>
+  config.whatsappCloud.token.length > 0 && config.whatsappCloud.phoneNumberId.length > 0;
 /** Any LLM configured at all? */
 export const hasLLM = () => hasGemini() || hasAnthropic() || hasGroq();
 /** Embeddings available? (only Gemini free embeddings for now) */
