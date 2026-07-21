@@ -12,7 +12,7 @@
 import { after } from "next/server";
 import { runPipeline } from "@/lib/agents/orchestrator";
 import { config, hasWhatsAppCloud } from "@/lib/config";
-import { sendWhatsAppCloud, downloadCloudMedia, verifySignature } from "@/lib/whatsapp/meta";
+import { sendWhatsAppCloud, downloadCloudMedia, verifySignature, listWabaApps, subscribeWabaToApp } from "@/lib/whatsapp/meta";
 import { formatCaseForWhatsApp, WELCOME } from "@/lib/whatsapp/format";
 import type { LanguageCode } from "@/lib/types";
 
@@ -58,6 +58,17 @@ export async function GET(request: Request) {
       info.error = e instanceof Error ? e.message : String(e);
     }
     return Response.json(info);
+  }
+
+  // Diagnostic: /api/whatsapp?subscribe=<WABA_ID>&token=<verify token>
+  // Subscribes this app to the WhatsApp Business Account's webhooks. Without
+  // this, Meta logs inbound messages but never delivers them to the callback.
+  const waba = u.searchParams.get("subscribe");
+  if (waba && u.searchParams.get("token") === config.whatsappCloud.verifyToken) {
+    const before = await listWabaApps(waba);
+    const subscribed = await subscribeWabaToApp(waba);
+    const after_ = await listWabaApps(waba);
+    return Response.json({ before, subscribed, after: after_ });
   }
 
   return new Response("NyayaSetu WhatsApp (Meta Cloud API) webhook is live.", {

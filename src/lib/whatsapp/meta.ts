@@ -48,6 +48,19 @@ export async function downloadCloudMedia(mediaId: string): Promise<ImageInput> {
   return { base64, mediaType };
 }
 
+/** List the apps currently subscribed to a WhatsApp Business Account's webhooks. */
+export async function listWabaApps(wabaId: string) {
+  const res = await fetch(`${graph()}/${wabaId}/subscribed_apps`, { headers: bearer() });
+  return { status: res.status, body: await res.text() };
+}
+
+/** Subscribe THIS app to a WhatsApp Business Account's webhooks. Without this,
+ *  Meta logs inbound messages but never delivers them to the callback URL. */
+export async function subscribeWabaToApp(wabaId: string) {
+  const res = await fetch(`${graph()}/${wabaId}/subscribed_apps`, { method: "POST", headers: bearer() });
+  return { status: res.status, body: await res.text() };
+}
+
 /** Optional: verify the X-Hub-Signature-256 header against the raw body. Returns
  *  true when no app secret is configured (so the check is opt-in). */
 export function verifySignature(rawBody: string, signature: string | null): boolean {
