@@ -28,8 +28,8 @@ function detectLang(text: string): LanguageCode | undefined {
   return undefined;
 }
 
-// ── GET: Meta webhook verification handshake ───────────────────────────────
-export function GET(request: Request) {
+// ── GET: Meta webhook verification handshake (+ a gated self-test) ─────────
+export async function GET(request: Request) {
   const u = new URL(request.url);
   const mode = u.searchParams.get("hub.mode");
   const token = u.searchParams.get("hub.verify_token");
@@ -37,6 +37,29 @@ export function GET(request: Request) {
   if (mode === "subscribe" && token && token === config.whatsappCloud.verifyToken) {
     return new Response(challenge ?? "", { status: 200 });
   }
+
+  // Diagnostic: /api/whatsapp?selftest=<phone>&token=<verify token>
+  // Attempts a real send and returns Meta's exact error, so setup problems
+  // (expired token, wrong phone-number id, recipient not allowed) are visible.
+  const selftest = u.searchParams.get("selftest");
+  if (selftest && u.searchParams.get("token") === config.whatsappCloud.verifyToken) {
+    const info = {
+      configured: hasWhatsAppCloud(),
+      phoneNumberId: config.whatsappCloud.phoneNumberId || "(missing)",
+      tokenLength: config.whatsappCloud.token.length,
+      apiVersion: config.whatsappCloud.apiVersion,
+      sent: false as boolean,
+      error: null as string | null,
+    };
+    try {
+      await sendWhatsAppCloud(selftest, "NyayaSetu self-test ✅ — your WhatsApp setup is working.");
+      info.sent = true;
+    } catch (e) {
+      info.error = e instanceof Error ? e.message : String(e);
+    }
+    return Response.json(info);
+  }
+
   return new Response("NyayaSetu WhatsApp (Meta Cloud API) webhook is live.", {
     status: 200,
     headers: { "Content-Type": "text/plain" },
@@ -81,18 +104,19 @@ export async function POST(request: Request) {
         const image = await downloadCloudMedia(media.id);
         const state = await runPipeline(image, { phone: from, outputLanguage }, () => {});
         await sendWhatsAppCloud(from, formatCaseForWhatsApp(state));
-      } catch {
+      } catch (e) {
+        console.error("[whatsapp] media flow failed:", e);
         await sendWhatsAppCloud(
           from,
           "Sorry, I couldn't read that document. Please send a clear, well-lit photo of the full page.",
-        ).catch(() => {});
+        ).catch((e2) => console.error("[whatsapp] fallback send failed:", e2));
       }
     });
     return new Response("OK", { status: 200 });
   }
 
   // Text only → welcome / instructions.
-  after(() => sendWhatsAppCloud(from, WELCOME).catch(() => {}));
+  after(() => sendWhatsAppCloud(from, WELCOME).catch((e) => console.error("[whatsapp] welcome send failed:", e)));
   return new Response("OK", { status: 200 });
 }
 
