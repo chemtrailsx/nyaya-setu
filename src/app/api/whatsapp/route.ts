@@ -9,6 +9,7 @@
  * and optionally WHATSAPP_APP_SECRET. Point the Meta app's webhook (field
  * "messages") at:  https://<your-app>/api/whatsapp
  */
+import { createHash } from "node:crypto";
 import { after } from "next/server";
 import { runPipeline } from "@/lib/agents/orchestrator";
 import { config, hasWhatsAppCloud } from "@/lib/config";
@@ -48,6 +49,9 @@ export async function GET(request: Request) {
       configured: hasWhatsAppCloud(),
       phoneNumberId: config.whatsappCloud.phoneNumberId || "(missing)",
       tokenLength: config.whatsappCloud.token.length,
+      // Fingerprint (not the token) so we can tell if the deployed value changed.
+      tokenFingerprint: createHash("sha256").update(config.whatsappCloud.token).digest("hex").slice(0, 10),
+      deployedCommit: (process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 7),
       apiVersion: config.whatsappCloud.apiVersion,
       sent: false as boolean,
       error: null as string | null,
