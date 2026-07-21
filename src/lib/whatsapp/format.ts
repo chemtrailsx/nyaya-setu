@@ -139,6 +139,21 @@ export function formatCaseForWhatsApp(state: CaseState): string {
   return text.length > 1550 ? text.slice(0, 1540) + "…" : text;
 }
 
+/**
+ * The same localised plan, cleaned up to be SPOKEN aloud — emoji, markdown,
+ * URLs and bullet symbols stripped — so a user who cannot read gets the whole
+ * thing as a WhatsApp voice note.
+ */
+export function speakableCase(state: CaseState): string {
+  return formatCaseForWhatsApp(state)
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[*_~`>#]/g, "")
+    .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{20E3}]/gu, "")
+    .replace(/[·•]/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Bilingual welcome shown when a user first texts (before any language is known). */
 export const WELCOME =
   "नमस्ते / Namaste 🙏\n\nमैं *NyayaSetu* हूँ — आपकी मुफ़्त कानूनी मदद।\nI am *NyayaSetu*, your free legal-aid helper.\n\n📸 अपने कानूनी दस्तावेज़ (FIR, नोटिस, ज़मीन का कागज़) की *फ़ोटो* भेजें — मैं आसान भाषा में बताऊँगा कि इसका मतलब क्या है और आगे क्या करना है।\nSend a *photo* of your legal document and I'll tell you what it means and what to do.\n\n🗣️ जवाब हिंदी में चाहिए? फ़ोटो के साथ *hindi* लिखें (या tamil, telugu, bengali, marathi).";

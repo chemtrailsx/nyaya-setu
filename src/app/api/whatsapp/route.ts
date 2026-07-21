@@ -12,8 +12,9 @@
 import { after } from "next/server";
 import { runPipeline } from "@/lib/agents/orchestrator";
 import { config, hasWhatsAppCloud } from "@/lib/config";
-import { sendWhatsAppCloud, downloadCloudMedia, verifySignature, listWabaApps, subscribeWabaToApp } from "@/lib/whatsapp/meta";
-import { formatCaseForWhatsApp, WELCOME } from "@/lib/whatsapp/format";
+import { sendWhatsAppCloud, downloadCloudMedia, verifySignature, listWabaApps, subscribeWabaToApp, uploadCloudMedia, sendWhatsAppAudio } from "@/lib/whatsapp/meta";
+import { formatCaseForWhatsApp, speakableCase, WELCOME } from "@/lib/whatsapp/format";
+import { synthesizeSpeech } from "@/lib/tts";
 import type { LanguageCode } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -116,6 +117,18 @@ export async function POST(request: Request) {
         const image = await downloadCloudMedia(media.id);
         const state = await runPipeline(image, { phone: from, outputLanguage }, () => {});
         await sendWhatsAppCloud(from, formatCaseForWhatsApp(state));
+
+        // Voice note of the same plan — the whole point for a user who cannot
+        // read. Best-effort: the text plan has already been delivered above.
+        try {
+          const speech = await synthesizeSpeech(speakableCase(state), state.language, 1400);
+          if (speech) {
+            const mediaId = await uploadCloudMedia(speech, "audio/mpeg", "nyayasetu-plan.mp3");
+            await sendWhatsAppAudio(from, mediaId);
+          }
+        } catch (audioErr) {
+          console.error("[whatsapp] voice note failed:", audioErr);
+        }
       } catch (e) {
         console.error("[whatsapp] media flow failed:", e);
         await sendWhatsAppCloud(

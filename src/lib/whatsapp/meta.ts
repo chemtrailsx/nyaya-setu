@@ -48,6 +48,34 @@ export async function downloadCloudMedia(mediaId: string): Promise<ImageInput> {
   return { base64, mediaType };
 }
 
+/** Upload a media file to WhatsApp and return its media id. */
+export async function uploadCloudMedia(bytes: Uint8Array, mimeType: string, filename: string): Promise<string> {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", mimeType);
+  form.append("file", new Blob([bytes as unknown as BlobPart], { type: mimeType }), filename);
+  // NOTE: no Content-Type header — FormData sets its own multipart boundary.
+  const res = await fetch(`${graph()}/${config.whatsappCloud.phoneNumberId}/media`, {
+    method: "POST",
+    headers: bearer(),
+    body: form,
+  });
+  if (!res.ok) throw new Error(`media upload failed: ${res.status} ${await res.text()}`);
+  const json = (await res.json()) as { id?: string };
+  if (!json.id) throw new Error("media upload returned no id");
+  return json.id;
+}
+
+/** Send an uploaded audio clip as a WhatsApp voice message. */
+export async function sendWhatsAppAudio(to: string, mediaId: string): Promise<void> {
+  const res = await fetch(`${graph()}/${config.whatsappCloud.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { ...bearer(), "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", to, type: "audio", audio: { id: mediaId } }),
+  });
+  if (!res.ok) throw new Error(`audio send failed: ${res.status} ${await res.text()}`);
+}
+
 /** List the apps currently subscribed to a WhatsApp Business Account's webhooks. */
 export async function listWabaApps(wabaId: string) {
   const res = await fetch(`${graph()}/${wabaId}/subscribed_apps`, { headers: bearer() });
