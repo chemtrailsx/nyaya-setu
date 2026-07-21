@@ -93,7 +93,8 @@ export async function POST(request: Request) {
   const from = msg.from;
   const media = msg.image ?? msg.document; // photo or PDF/Word document
   if (media?.id) {
-    const caption = msg.image?.caption ?? "";
+    // WhatsApp sends a picked file as type "document" (with its own caption).
+    const caption = msg.image?.caption ?? msg.document?.caption ?? msg.text?.body ?? "";
     const outputLanguage = detectLang(caption);
     after(async () => {
       try {
