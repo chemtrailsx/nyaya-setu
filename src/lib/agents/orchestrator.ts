@@ -128,18 +128,26 @@ export async function runPipeline(
     emit({ type: "agent_result", agent: "strategy", result: strategy });
 
     // ── 03 Drafting ────────────────────────────────────────────────────────
+    // Drafting failure (e.g. an LLM returning malformed JSON on a token-heavy
+    // script) must NOT halt the run — the user still gets the plan, eligibility,
+    // helplines and the human handoff. Forms are simply omitted on failure.
     let draftConfidence: number | undefined;
     if (strategy.steps.length > 0) {
       log("drafting", "running", "Drafting the filing in the user's language…");
-      const draft = await runDraftingAgent(document, strategy, outputLang, jurisdiction);
-      state.draft = draft;
-      draftConfidence = draft.draftConfidence;
-      log(
-        "drafting",
-        "done",
-        `${draft.documents.length} form(s) drafted: ${draft.documents.map((d) => d.kind).join(", ")} (confidence ${draft.draftConfidence}).`,
-      );
-      emit({ type: "agent_result", agent: "drafting", result: draft });
+      try {
+        const draft = await runDraftingAgent(document, strategy, outputLang, jurisdiction);
+        state.draft = draft;
+        draftConfidence = draft.draftConfidence;
+        log(
+          "drafting",
+          "done",
+          `${draft.documents.length} form(s) drafted: ${draft.documents.map((d) => d.kind).join(", ")} (confidence ${draft.draftConfidence}).`,
+        );
+        emit({ type: "agent_result", agent: "drafting", result: draft });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log("drafting", "error", `Could not draft forms (${msg.slice(0, 80)}); continuing with the plan.`);
+      }
     }
 
     // ── Confidence gate ────────────────────────────────────────────────────

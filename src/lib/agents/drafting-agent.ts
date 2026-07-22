@@ -63,6 +63,12 @@ export async function runDraftingAgent(
   jurisdiction: Jurisdiction = resolveJurisdiction(),
 ): Promise<DraftAgentResult> {
   const langName = SUPPORTED_LANGUAGES[outputLang].name;
+  // Non-Latin Indian scripts (Devanagari, Kannada, Tamil…) cost 2-3× more tokens
+  // than English, so the full packet can overrun the model's output cap and get
+  // truncated into invalid JSON. For those, ask for a leaner packet that fits.
+  const heavy = SUPPORTED_LANGUAGES[outputLang].script !== "Latin";
+  const maxForms = heavy ? 2 : 3;
+  const maxFields = heavy ? 5 : 8;
   const packet = PACKET_BY_CATEGORY[doc.category] ?? PACKET_BY_CATEGORY.other;
   const citations = Array.from(
     new Set(strategy.steps.flatMap((s) => s.citations.map((c) => `${c.code} ${c.section}`))),
@@ -108,7 +114,7 @@ Return this exact JSON:
 }
 Rules:
 - For any land/revenue form, address it to ${jurisdiction.revenueOffice} / ${jurisdiction.revenueOfficer}, use the local mutation term (${jurisdiction.mutationTerm}), and if online use ONLY the ${jurisdiction.name} land portal above — never another state's.
-- 2 to 3 forms, ordered by what to file FIRST. 3 to 8 real fields per form.
+- Produce ${maxForms} form(s), ordered by what to file FIRST, with 3 to ${maxFields} real fields each.${heavy ? " Keep every 'body' to a SHORT, complete formal letter (salutation, one-paragraph subject/body, prayer, signature) — do not pad it." : ""}
 - Every [Label] placeholder in a body MUST match a field label exactly.
 - Everything (names, purposes, fields, bodies) in ${langName}.
 - Use "online" + the real portal URL only for forms that genuinely map to a listed portal; heir certificates, affidavits, police complaints and court filings are "print".`;
@@ -122,7 +128,7 @@ Rules:
   const clamp = (n: unknown) => Math.min(1, Math.max(0, Number(n) || 0));
   const documents: DraftDocument[] = (Array.isArray(out.documents) ? out.documents : [])
     .filter((d) => d && typeof d.body === "string" && d.body.length > 40)
-    .slice(0, 3)
+    .slice(0, maxForms)
     .map((d) => ({
       kind: (d.kind ?? "other") as DraftDocument["kind"],
       title: d.title ?? "",
@@ -132,7 +138,7 @@ Rules:
       submissionMode: d.submissionMode === "online" && d.portalUrl ? "online" : "print",
       portalName: d.submissionMode === "online" ? d.portalName : undefined,
       portalUrl: d.submissionMode === "online" ? d.portalUrl : undefined,
-      fields: Array.isArray(d.fields) ? d.fields.filter((f) => f?.label).slice(0, 8) : [],
+      fields: Array.isArray(d.fields) ? d.fields.filter((f) => f?.label).slice(0, maxFields) : [],
       body: d.body!,
       submitTo: d.submitTo || undefined,
       contact: d.contact || undefined,
@@ -141,7 +147,7 @@ Rules:
 
   const documentsToCollect: CollectDoc[] = (Array.isArray(out.documentsToCollect) ? out.documentsToCollect : [])
     .filter((c) => c?.name)
-    .slice(0, 6)
+    .slice(0, heavy ? 4 : 6)
     .map((c) => ({ name: c.name, whereToGet: c.whereToGet ?? "", contact: c.contact }));
 
   return {
