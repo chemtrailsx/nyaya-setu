@@ -25,7 +25,7 @@ never invent text that is not present.`;
 const SHAPE = `{
   "isLegalDocument": <true ONLY if this is a genuine legal/official/government document — an FIR, court notice, summons, legal notice, land or property record, government form, ID card, ration card, affidavit, or similar. Set FALSE for anything else: a diagram, chart, screenshot, photo of a person or place, receipt, advertisement, blank page, or random text.>,
   "extractedText": "<the text content, verbatim, in its original script>",
-  "language": "<one of: hi, en, bn, ta, te, mr>",
+  "language": "<one of: hi, en, bn, ta, te, mr, kn>",
   "languageConfidence": <0..1>,
   "category": "<one of: land_inheritance, fir_denial, domestic_violence, rti, consumer, other>",
   "summary": "<2-3 sentence plain-language summary IN THE DOCUMENT'S OWN LANGUAGE. If isLegalDocument is false, briefly say what the upload appears to be and that it is not a legal document.>",
@@ -84,7 +84,7 @@ export async function runDocumentAgent(
   const isLegalDocument = result.isLegalDocument !== false; // default true unless the model says no
   return {
     extractedText: redactedText.text,
-    language: (["hi", "en", "bn", "ta", "te", "mr"].includes(result.language)
+    language: (["hi", "en", "bn", "ta", "te", "mr", "kn"].includes(result.language)
       ? result.language
       : "en") as DocumentAgentResult["language"],
     languageConfidence: clamp(result.languageConfidence),

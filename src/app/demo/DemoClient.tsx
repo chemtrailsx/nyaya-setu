@@ -15,7 +15,7 @@ const LANG_OPTIONS: { code: string; label: string }[] = [
 ];
 
 const BCP47: Record<string, string> = {
-  hi: "hi-IN", en: "en-IN", bn: "bn-IN", ta: "ta-IN", te: "te-IN", mr: "mr-IN", auto: "en-IN",
+  hi: "hi-IN", en: "en-IN", bn: "bn-IN", ta: "ta-IN", te: "te-IN", mr: "mr-IN", kn: "kn-IN", auto: "en-IN",
 };
 
 // Real, free national helplines — tappable to dial on a phone.

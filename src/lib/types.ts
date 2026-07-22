@@ -22,6 +22,7 @@ export const SUPPORTED_LANGUAGES = {
   ta: { name: "Tamil", native: "தமிழ்", script: "Tamil" },
   te: { name: "Telugu", native: "తెలుగు", script: "Telugu" },
   mr: { name: "Marathi", native: "मराठी", script: "Devanagari" },
+  kn: { name: "Kannada", native: "ಕನ್ನಡ", script: "Kannada" },
 } as const;
 
 export type LanguageCode = keyof typeof SUPPORTED_LANGUAGES;

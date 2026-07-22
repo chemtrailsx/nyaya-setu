@@ -22,7 +22,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const LANG_WORDS: Record<string, LanguageCode> = {
-  hindi: "hi", हिंदी: "hi", english: "en", tamil: "ta", telugu: "te", bengali: "bn", marathi: "mr",
+  hindi: "hi", हिंदी: "hi", english: "en", tamil: "ta", telugu: "te", bengali: "bn", marathi: "mr", kannada: "kn", ಕನ್ನಡ: "kn",
 };
 function detectLang(text: string): LanguageCode | undefined {
   const b = (text || "").toLowerCase();

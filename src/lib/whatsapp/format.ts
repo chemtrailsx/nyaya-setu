@@ -97,6 +97,19 @@ const LABELS: Record<LanguageCode, Labels> = {
     disclaimer:
       "_हे प्राथमिक मार्गदर्शन आहे, अंतिम कायदेशीर मत नाही. वरील कार्यालयात खात्री करा. न्यायालयात दाखल होणाऱ्या कोणत्याही कागदपत्राची वकील तपासणी करतात._",
   },
+  kn: {
+    notLegal: "⚠️ ಇದು ಕಾನೂನು ದಾಖಲೆಯಂತೆ ಕಾಣುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು ನಿಜವಾದ ಕಾನೂನು ದಾಖಲೆಯ (FIR, ಕೋರ್ಟ್ ನೋಟಿಸ್, ಭೂಮಿ ದಾಖಲೆ, ಅಥವಾ ಕಾನೂನು ಪತ್ರ) ಫೋಟೋ ಅಥವಾ PDF ಕಳುಹಿಸಿ.",
+    meaning: "📄 *ಇದರ ಅರ್ಥ:*",
+    whatToDo: "✅ *ಏನು ಮಾಡಬೇಕು:*",
+    idsMasked: (n) => `🔒 ನಿಮ್ಮ ಸುರಕ್ಷತೆಗಾಗಿ ${n} ವೈಯಕ್ತಿಕ ಗುರುತುಗಳನ್ನು (ಆಧಾರ್/ಪ್ಯಾನ್/ಫೋನ್) ಮರೆಮಾಡಲಾಗಿದೆ.`,
+    nalsa: "🆓 ನೀವು NALSA ಯಿಂದ *ಉಚಿತ* ಕಾನೂನು ಸಹಾಯಕ್ಕೆ ಅರ್ಹರಾಗಿರಬಹುದು.",
+    escalated: (name, district, hours) =>
+      `👩‍⚖️ ನಿಮ್ಮ ಪ್ರಕರಣವನ್ನು — *${name}* (${district}) ಗೆ ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ. ಅವರು ${hours} ಗಂಟೆಗಳಲ್ಲಿ ಸಂಪರ್ಕಿಸುತ್ತಾರೆ.`,
+    nextHearing: (date) => `📅 ಮುಂದಿನ ವಿಚಾರಣೆ / ಕ್ರಮ: ${date}`,
+    helplines: "☎️ *ಉಚಿತ ಸಹಾಯವಾಣಿ:* ಕಾನೂನು ಸಹಾಯ 15100 · ಮಹಿಳೆ 181 · ಪೊಲೀಸ್ 112",
+    disclaimer:
+      "_ಇದು ಪ್ರಾಥಮಿಕ ಮಾರ್ಗದರ್ಶನ, ಅಂತಿಮ ಕಾನೂನು ಅಭಿಪ್ರಾಯವಲ್ಲ. ಮೇಲೆ ಹೆಸರಿಸಿದ ಕಚೇರಿಯಲ್ಲಿ ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಿ. ನ್ಯಾಯಾಲಯದಲ್ಲಿ ಸಲ್ಲಿಸುವ ಯಾವುದೇ ದಾಖಲೆಯನ್ನು ವಕೀಲರು ಪರಿಶೀಲಿಸುತ್ತಾರೆ._",
+  },
 };
 
 export function formatCaseForWhatsApp(state: CaseState): string {
@@ -156,4 +169,4 @@ export function speakableCase(state: CaseState): string {
 
 /** Bilingual welcome shown when a user first texts (before any language is known). */
 export const WELCOME =
-  "नमस्ते / Namaste 🙏\n\nमैं *NyayaSetu* हूँ — आपकी मुफ़्त कानूनी मदद।\nI am *NyayaSetu*, your free legal-aid helper.\n\n📸 अपने कानूनी दस्तावेज़ (FIR, नोटिस, ज़मीन का कागज़) की *फ़ोटो* भेजें — मैं आसान भाषा में बताऊँगा कि इसका मतलब क्या है और आगे क्या करना है।\nSend a *photo* of your legal document and I'll tell you what it means and what to do.\n\n🗣️ जवाब हिंदी में चाहिए? फ़ोटो के साथ *hindi* लिखें (या tamil, telugu, bengali, marathi).";
+  "नमस्ते / Namaste 🙏\n\nमैं *NyayaSetu* हूँ — आपकी मुफ़्त कानूनी मदद।\nI am *NyayaSetu*, your free legal-aid helper.\n\n📸 अपने कानूनी दस्तावेज़ (FIR, नोटिस, ज़मीन का कागज़) की *फ़ोटो* भेजें — मैं आसान भाषा में बताऊँगा कि इसका मतलब क्या है और आगे क्या करना है।\nSend a *photo* of your legal document and I'll tell you what it means and what to do.\n\n🗣️ जवाब हिंदी में चाहिए? फ़ोटो के साथ *hindi* लिखें (या tamil, telugu, bengali, marathi, kannada).";
