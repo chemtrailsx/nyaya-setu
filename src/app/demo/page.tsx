@@ -47,6 +47,15 @@ export default function DemoPage() {
               Take a photo of any legal paper — FIR, land document, court notice or letter — and
               get simple, step-by-step help in your own language, free.
             </p>
+            <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-ink-3">
+              <span className="mt-0.5 text-[#25D366]">●</span>
+              <span>
+                <strong className="text-ink-2">Also on WhatsApp</strong> — in this prototype it works only for
+                pre-registered numbers, built on the free <strong>Meta WhatsApp Cloud API</strong>. On
+                commercialisation it moves to a verified <strong>WhatsApp Business</strong> number anyone can message
+                directly.
+              </span>
+            </p>
           </div>
         </div>
         <DemoClient />
